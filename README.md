@@ -50,8 +50,9 @@ That script does everything else for you: it creates a private virtual
 environment, installs PyTorch with CUDA (it detects your GPU automatically),
 installs the two other small packages, then opens
 [http://localhost:8000](http://localhost:8000) with a live training dashboard —
-loss chart, throughput, story samples, and a box to chat with your model when
-it's done.
+loss chart, throughput, the checkpoint samples, and a box to chat with your
+model that **streams the reply token by token** (like the app you're used to)
+once it's done.
 
 Want a quick taste first? `run.bat --preset nano` (a couple of minutes).
 
@@ -156,6 +157,22 @@ By default only the *final* model is written to `out/`. To also save the
 add `save_checkpoints=True` — `get_configs(PRESET, save_checkpoints=True)` in the
 notebook, or `run.bat --save-checkpoints` locally. Each snapshot then writes
 `out/model-<preset>-step<N>.pt`.
+
+## Peek inside your model
+
+The notebook ends with a few cheap, fun lenses (all in
+[`magicmath/lenses.py`](magicmath/lenses.py)) for poking at what the model
+actually learned:
+
+- **tokens** — watch your text get chopped into the integers the model sees
+  (try a rare word vs a common one).
+- **the model's options** — the top candidate *next* tokens and their
+  probabilities. This is literally what `temperature` and top-k act on.
+- **embedding neighbours** — the tokens the model placed *nearest each other* in
+  its learned vector space. It figured those neighbourhoods out purely from
+  predicting text — a nice payoff if you already think in vectors.
+- **early vs late** — load an early checkpoint and a late one and give them the
+  same prompt, side by side (the clearest before/after of what training bought).
 
 ## Make it yours — hand the repo to Claude
 

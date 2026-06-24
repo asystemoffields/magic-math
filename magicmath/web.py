@@ -100,8 +100,20 @@ def make_handler(state: AppState):
                 self._stream_events()
             elif path == "/generate":
                 self._generate()
+            elif path == "/generate_stream":
+                self._generate_stream()
             else:
                 self._send(404, b"not found")
+
+        def _ready_model(self):
+            """Return (model, tok, device) once available, briefly waiting out
+            the train->serve handoff; None if still training."""
+            with state.lock:
+                m = (state.model, state.tokenizer, state.device)
+            if m[0] is None and state.model_ready.wait(timeout=5):
+                with state.lock:
+                    m = (state.model, state.tokenizer, state.device)
+            return m if m[0] is not None else None
 
         def _stream_events(self):
             self.send_response(200)
@@ -125,28 +137,50 @@ def make_handler(state: AppState):
             finally:
                 state.hub.unsubscribe(q)
 
-        def _generate(self):
+        def _params(self):
             qs = parse_qs(urlparse(self.path).query)
-            with state.lock:
-                model, tok, device = state.model, state.tokenizer, state.device
-            if model is None:
-                # If training just signalled 'done', the model is being handed
-                # over right now — wait a moment for it rather than failing.
-                if state.model_ready.wait(timeout=5):
-                    with state.lock:
-                        model, tok, device = state.model, state.tokenizer, state.device
-            if model is None:
+            return (qs.get("prompt", [""])[0],
+                    int(qs.get("tokens", ["200"])[0]),
+                    float(qs.get("temperature", ["0.8"])[0]))
+
+        def _generate(self):
+            ready = self._ready_model()
+            if ready is None:
                 self._send(409, json.dumps({"error": "model still training"}).encode(),
                            "application/json")
                 return
-            prompt = qs.get("prompt", [""])[0]
-            tokens = int(qs.get("tokens", ["200"])[0])
-            temperature = float(qs.get("temperature", ["0.8"])[0])
+            model, tok, device = ready
+            prompt, tokens, temperature = self._params()
             from .sample import generate as _gen
             with state.lock:
                 text = _gen(model, tok, prompt, max_new_tokens=tokens,
                             temperature=temperature, device=device)
             self._send(200, json.dumps({"text": text}).encode(), "application/json")
+
+        def _generate_stream(self):
+            """Stream the completion token-by-token as plain text, so the page
+            can show the model writing live."""
+            ready = self._ready_model()
+            if ready is None:
+                self._send(409, json.dumps({"error": "model still training"}).encode(),
+                           "application/json")
+                return
+            model, tok, device = ready
+            prompt, tokens, temperature = self._params()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            from .sample import generate_stream
+            try:
+                # one generation at a time (the model isn't thread-safe)
+                with state.lock:
+                    for delta in generate_stream(model, tok, prompt, max_new_tokens=tokens,
+                                                 temperature=temperature, device=device):
+                        self.wfile.write(delta.encode("utf-8"))
+                        self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     return Handler
 

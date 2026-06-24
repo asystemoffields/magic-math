@@ -206,14 +206,19 @@ function enableGenerate(){
   $('genhint').textContent='ready — try a prompt';
 }
 $('genbtn').onclick=async()=>{
-  const btn=$('genbtn'); btn.disabled=true; btn.textContent='thinking…';
-  const out=$('genout'); out.style.display='block'; out.textContent='…';
+  const btn=$('genbtn'); btn.disabled=true; btn.textContent='writing…';
+  const out=$('genout'); out.style.display='block'; out.textContent='';
   try{
     const q=new URLSearchParams({prompt:$('prompt').value,
       tokens:$('ntok').value, temperature:$('temp').value});
-    const r=await fetch('/generate?'+q.toString());
-    const j=await r.json();
-    out.textContent=j.text||j.error||'(no output)';
+    const r=await fetch('/generate_stream?'+q.toString());
+    if(!r.ok){ out.textContent=(await r.json().catch(()=>({}))).error||'not ready yet'; }
+    else{
+      // stream the tokens in as the model produces them
+      const reader=r.body.getReader(), dec=new TextDecoder();
+      for(;;){ const {value,done}=await reader.read(); if(done) break;
+        out.textContent+=dec.decode(value,{stream:true}); out.scrollTop=out.scrollHeight; }
+    }
   }catch(e){out.textContent='error: '+e;}
   btn.disabled=false; btn.textContent='generate';
 };

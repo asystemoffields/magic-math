@@ -98,7 +98,9 @@ CELLS = [
         "",
         'PRESET = "small"  # @param ["nano", "small", "default"]',
         "",
-        "model_cfg, train_cfg = get_configs(PRESET)",
+        "# save_checkpoints=True keeps the model's weights at every checkpoint, so",
+        "# Step 6 can compare an early one against a late one.",
+        "model_cfg, train_cfg = get_configs(PRESET, save_checkpoints=True)",
         "print(json.dumps(config_summary(model_cfg, train_cfg), indent=2))",
         form=True,
     ),
@@ -170,12 +172,63 @@ CELLS = [
         "more predictable).",
     ),
     code(
-        "from magicmath.sample import generate",
+        "from magicmath.sample import generate_stream",
         "",
         'prompt = "Once upon a time, a little robot"  # @param {type:"string"}',
         "",
-        "print(generate(result['model'], result['tokenizer'], prompt,",
-        "               max_new_tokens=250, temperature=0.8))",
+        "# stream the tokens in as the model writes them",
+        "for delta in generate_stream(result['model'], result['tokenizer'], prompt,",
+        "                             max_new_tokens=250, temperature=0.8):",
+        "    print(delta, end='', flush=True)",
+        form=True,
+    ),
+    md(
+        "## Step 5 — look inside your model",
+        "",
+        "Three quick lenses into what it actually learned (each is just a few "
+        "lines, in `magicmath/lenses.py`):",
+        "",
+        "- **tokens** — how your text is chopped into the integers the model sees.",
+        "- **the model's options** — its top candidates for the *next* token and "
+        "their probabilities. Lowering `temperature` piles the probability onto "
+        "the top few; that's all temperature does.",
+        "- **embedding neighbours** — which tokens the model placed *near each "
+        "other* in its vector space. It worked these out purely from predicting "
+        "text; nobody told it which words are related.",
+    ),
+    code(
+        "from magicmath import lenses",
+        "tok = result['tokenizer']; model = result['model']",
+        "",
+        'ids, pieces = lenses.tokenize_view(tok, "Once upon a time, a dragon")',
+        'print(f"{len(ids)} tokens:", " | ".join(repr(p) for p in pieces))',
+        "",
+        "print(\"\\nTop next-token guesses after 'Once upon a':\")",
+        'for t, p in lenses.next_token_table(model, tok, "Once upon a", k=8):',
+        '    print(f"  {p:6.1%}  {t!r}")',
+        "",
+        'print("\\nTokens nearest the word dog in embedding space:")',
+        'for t, s in lenses.nearest_tokens(model, tok, " dog", k=8):',
+        '    print(f"  {s:+.3f}  {t!r}")',
+    ),
+    md(
+        "## Step 6 — compare two checkpoints (early vs late)",
+        "",
+        "Because we saved the model at every checkpoint, you can load an **early** "
+        "one and a **late** one and give them the *same* prompt — the clearest "
+        "before/after of what all that training actually bought.",
+    ),
+    code(
+        "from magicmath import sample",
+        "ckpts = sample.list_checkpoints(train_cfg.out_dir, PRESET)",
+        'print("saved checkpoints at steps:", [s for s, _ in ckpts])',
+        "",
+        'prompt = "The cat sat on the"  # @param {type:"string"}',
+        "early_step, early_path = ckpts[0]    # first saved — near step 0, ~noise",
+        "late_step,  late_path  = ckpts[-1]   # last saved — fully trained",
+        "a, b = sample.compare_checkpoints(early_path, late_path, prompt, max_new_tokens=120)",
+        'print(f"\\n=== step {early_step} (early) ===\\n{a}")',
+        'print(f"\\n=== step {late_step} (late) ===\\n{b}")',
         form=True,
     ),
     md(
