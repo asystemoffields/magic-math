@@ -86,6 +86,8 @@ class TrainConfig:
     seed: int = 1337
     out_dir: str = "out"
     compile: bool = False           # torch.compile — faster on Linux, flaky on Windows; off by default
+    save_checkpoints: bool = False  # also save the model's weights at each sample step
+                                    # (out/model-<preset>-step<N>.pt), not just the final one
 
     def __post_init__(self):
         assert self.seq_len <= 8192

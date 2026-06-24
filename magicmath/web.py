@@ -212,11 +212,15 @@ def main():
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
     ap.add_argument("--max-steps", type=int, default=None, help="override the step count")
+    ap.add_argument("--save-checkpoints", action="store_true",
+                    help="also save the model's weights at each checkpoint step")
     args = ap.parse_args()
 
     overrides = {}
     if args.max_steps is not None:
         overrides["max_steps"] = args.max_steps
+    if args.save_checkpoints:
+        overrides["save_checkpoints"] = True
     serve(preset=args.preset, host=args.host, port=args.port,
           open_browser=not args.no_browser, overrides=overrides)
 

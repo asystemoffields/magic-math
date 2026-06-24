@@ -137,6 +137,26 @@ The entire dependency list is **three packages**: `torch`, `numpy`,
 
 Change the preset in the notebook's dropdown, or pass `--preset` to `run.bat`.
 
+## Watching it learn (checkpoints)
+
+The whole point of this repo is *visible* progress. During training, both paths
+sample the model's writing from *“Once upon a time”* at a series of
+**checkpoints** — starting at **step 0** (random noise) and every few hundred
+steps after — and those snapshots **accumulate** so you can scroll the full arc:
+
+```
+── step 0 ──     prtmk oyye th ,a  e  oo nt...        (random weights)
+── step 750 ──   the boy was a dog and the the play   (words, no grammar yet)
+── step 3000 ──  Once upon a time there was a little   (sentences appear)
+                 girl named Lily. She liked to play...
+```
+
+By default only the *final* model is written to `out/`. To also save the
+**weights at every checkpoint** (so you can reload an early model and compare),
+add `save_checkpoints=True` — `get_configs(PRESET, save_checkpoints=True)` in the
+notebook, or `run.bat --save-checkpoints` locally. Each snapshot then writes
+`out/model-<preset>-step<N>.pt`.
+
 ## Make it yours — hand the repo to Claude
 
 This is a toy you're meant to take apart, and it's small enough that Claude can

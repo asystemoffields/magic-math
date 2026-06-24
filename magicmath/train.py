@@ -139,6 +139,7 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, data: dict,
     t0 = time.time()
     last_t = t0
     last_tokens = 0
+    last_val = None   # most recent validation loss, attached to each sample
 
     for step in range(train_cfg.max_steps):
         lr = _lr_at(step, train_cfg)
@@ -182,15 +183,20 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, data: dict,
         # --- periodic validation ------------------------------------------
         if on_event and train_cfg.eval_interval and (
                 (step + 1) % train_cfg.eval_interval == 0 or step == train_cfg.max_steps - 1):
-            vloss = estimate_val_loss(model, val_batcher, train_cfg, autocast_ctx)
-            on_event({"type": "eval", "step": step, "val_loss": vloss})
+            last_val = estimate_val_loss(model, val_batcher, train_cfg, autocast_ctx)
+            on_event({"type": "eval", "step": step, "val_loss": last_val})
             last_t = time.time()  # don't count eval time against throughput
 
-        # --- periodic text sample -----------------------------------------
+        # --- checkpoint: snapshot what the model writes (and optionally its
+        #     weights) so you can watch it improve from noise -> sentences ----
         if on_event and train_cfg.sample_interval and (
-                (step + 1) % train_cfg.sample_interval == 0 or step == train_cfg.max_steps - 1):
+                step == 0 or (step + 1) % train_cfg.sample_interval == 0
+                or step == train_cfg.max_steps - 1):
             text = _sample_text(model, tok, train_cfg, device)
-            on_event({"type": "sample", "step": step, "text": text})
+            ev = {"type": "sample", "step": step, "text": text, "val_loss": last_val}
+            if train_cfg.save_checkpoints:
+                ev["ckpt"] = save_checkpoint(model, model_cfg, train_cfg, data, device, step=step)
+            on_event(ev)
             last_t = time.time()
 
     elapsed = time.time() - t0
@@ -202,9 +208,11 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, data: dict,
     return {"model": model, "tokenizer": tok, "device": device, "ckpt": ckpt}
 
 
-def save_checkpoint(model, model_cfg, train_cfg, data, device) -> str:
+def save_checkpoint(model, model_cfg, train_cfg, data, device, step=None) -> str:
     os.makedirs(train_cfg.out_dir, exist_ok=True)
-    path = os.path.join(train_cfg.out_dir, f"model-{train_cfg.preset}.pt")
+    name = f"model-{train_cfg.preset}.pt" if step is None \
+        else f"model-{train_cfg.preset}-step{step}.pt"
+    path = os.path.join(train_cfg.out_dir, name)
     raw = getattr(model, "_orig_mod", model)  # unwrap torch.compile if used
     torch.save({
         "model_state": raw.state_dict(),

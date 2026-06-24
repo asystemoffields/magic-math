@@ -24,11 +24,15 @@ def main():
     ap.add_argument("--max-steps", type=int, default=None, help="override the step count")
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--device", default=None, help="cuda / cpu (auto-detected if omitted)")
+    ap.add_argument("--save-checkpoints", action="store_true",
+                    help="also save the model's weights at each checkpoint step")
     args = ap.parse_args()
 
     overrides = {}
     if args.max_steps is not None:
         overrides["max_steps"] = args.max_steps
+    if args.save_checkpoints:
+        overrides["save_checkpoints"] = True
 
     model_cfg, train_cfg = get_configs(args.preset, **overrides)
     device = args.device or pick_device()
