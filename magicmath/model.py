@@ -1,17 +1,17 @@
 """
 The model — a small, *modern* decoder-only transformer.
 
-If your mental model of a transformer is GPT-2 (2019), here is what changed by
-~2024 and is baked into this file. Each is a small swap that buys real quality:
+This is the same architecture family as Llama 3, Mistral and Qwen, just shrunk.
+Each component below is the current standard choice; together they're what lets a
+model this size train stably and write coherent text. The one-liners say what
+each part buys you — the full reasoning is in the comments where it's defined.
 
-  GPT-2                         this model (Llama-3 era)        why
-  ------------------------------------------------------------------------------
-  LayerNorm (mean+var, biases)  RMSNorm (scale only)            simpler, faster, ~as good
-  learned position embeddings   RoPE (rotary)                   relative, length-extrapolating
-  multi-head attention (MHA)    grouped-query attention (GQA)   fewer K/V = smaller cache
-  GELU MLP (2 matmuls)          SwiGLU MLP (3 matmuls, gated)   better tokens-per-param
-  biases everywhere             no biases                       fewer params, no quality loss
-  post-norm                     pre-norm                        stable training, no warmup tricks
+  RMSNorm                  keep every vector at a sane size — simple and cheap
+  RoPE (rotary)            encode token position by *rotating* vectors -> relative
+  grouped-query attention  share key/value heads -> a much smaller memory cache
+  SwiGLU MLP               a *gated* feed-forward layer -> more quality per param
+  no biases, pre-norm      lean and stable to train
+  tied embeddings          one table for input and output -> fewer parameters
 
 Read top to bottom: RMSNorm -> RoPE -> Attention -> SwiGLU -> Block -> Model.
 """
@@ -50,11 +50,12 @@ class RMSNorm(nn.Module):
 # ----------------------------------------------------------------------------
 # Rotary Position Embeddings (RoPE)
 # ----------------------------------------------------------------------------
-# GPT-2 added a learned vector for "position 5". RoPE instead *rotates* each
-# query/key vector by an angle proportional to its position. The dot product
-# between a query at position m and a key at position n then depends only on
-# (m - n) — i.e. attention becomes naturally *relative*. There are no position
-# parameters to learn, and the model extrapolates to longer contexts better.
+# Attention on its own is order-blind — it sees a *set* of tokens, not a
+# sequence — so something must encode where each token sits. RoPE does this by
+# *rotating* each query/key vector by an angle proportional to its position. The
+# dot product between a query at position m and a key at position n then depends
+# only on (m - n) — i.e. attention becomes naturally *relative*. There are no
+# position parameters to learn, and it extrapolates to longer contexts better.
 def build_rope_cache(head_dim: int, max_seq_len: int, base: float = 10000.0):
     """Precompute the cos/sin tables of shape (max_seq_len, head_dim/2)."""
     inv_freq = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
@@ -142,10 +143,11 @@ class Attention(nn.Module):
 # SwiGLU MLP — the per-token "thinking" layer
 # ----------------------------------------------------------------------------
 class SwiGLU(nn.Module):
-    """GPT-2's MLP was: up-project, GELU, down-project. SwiGLU adds a *gate*:
-    one projection is squashed by SiLU and multiplied into another. The
-    element-wise gate lets the layer suppress or pass information per-channel,
-    which empirically gives more quality per parameter. (Llama, PaLM, ...)"""
+    """The feed-forward layer, where each token's vector is transformed on its
+    own. SwiGLU uses a *gate*: one projection is squashed by SiLU and multiplied
+    element-wise into another, then projected back down. The gate lets the layer
+    pass or suppress information per channel, which empirically gives more
+    quality per parameter than a plain activation. (Llama, PaLM, Mistral, ...)"""
 
     def __init__(self, cfg: ModelConfig):
         super().__init__()
@@ -202,9 +204,9 @@ class MagicMath(nn.Module):
         self.register_buffer("rope_sin", sin, persistent=False)
 
         self.apply(self._init_weights)
-        # GPT-2's trick: scale down the projections that write *into* the
-        # residual stream by 1/sqrt(2*n_layers), so the residual doesn't grow
-        # with depth.
+        # A standard initialization trick: scale down the projections that write
+        # *into* the residual stream by 1/sqrt(2*n_layers), so the residual
+        # doesn't grow with depth.
         scale = 0.02 / math.sqrt(2 * cfg.n_layers)
         for name, p in self.named_parameters():
             if name.endswith("o_proj.weight") or name.endswith("down_proj.weight"):

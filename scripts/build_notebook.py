@@ -170,22 +170,21 @@ CELLS = [
         form=True,
     ),
     md(
-        "## What made this model *modern* (the GPT-2 → Llama-3 deltas)",
+        "## What makes this model *modern*",
         "",
-        "If you've heard the original GPT/GPT-2 described, this model quietly "
-        "swaps almost every component for its 2024 successor. Each swap is small "
-        "and buys real quality — this is roughly the gap between 2019 and today:",
+        "This is the same architecture family as today's open models (Llama 3, "
+        "Mistral, Qwen), just small. Each component is the current standard "
+        "choice, and each one buys real quality:",
         "",
-        "- **RMSNorm** instead of LayerNorm — normalize each vector by its length "
-        "only (no mean, no bias). Simpler, faster, just as good.",
-        "- **RoPE** (rotary position embeddings) instead of learned position "
-        "vectors — positions are encoded by *rotating* query/key vectors, which "
-        "makes attention naturally relative and length-flexible.",
-        "- **Grouped-Query Attention** instead of plain multi-head — fewer "
-        "key/value heads, which is what lets big models keep a small memory cache "
-        "at inference.",
-        "- **SwiGLU** instead of a GELU MLP — a *gated* feed-forward layer that "
-        "gets more out of each parameter.",
+        "- **RMSNorm** — normalize each vector by its length (no mean, no bias). "
+        "Keeps training stable, cheaply.",
+        "- **RoPE** (rotary position embeddings) — encode a token's position by "
+        "*rotating* its query/key vectors, which makes attention naturally "
+        "relative and length-flexible.",
+        "- **Grouped-Query Attention** — share key/value heads across query "
+        "heads, which is what lets models keep a small memory cache at inference.",
+        "- **SwiGLU** — a *gated* feed-forward layer that gets more out of each "
+        "parameter.",
         "- **No biases, pre-normalization, tied embeddings** — small modern "
         "hygiene that makes training stable and parameter-efficient.",
         "",

@@ -10,8 +10,9 @@ weights anywhere in this repo) using byte-level Byte-Pair Encoding (BPE):
      into a new token. Common chunks ("the", " said", "ing") become single ids.
   3. Stop at `vocab_size` tokens.
 
-This is exactly how GPT-2/Llama tokenizers are built, just smaller. We lean on
-the `tokenizers` library (Rust-backed) so training the vocab takes seconds.
+This is exactly how production tokenizers (Llama, Mistral, ...) are built, just
+smaller. We lean on the `tokenizers` library (Rust-backed) so training the vocab
+takes seconds.
 """
 
 from __future__ import annotations

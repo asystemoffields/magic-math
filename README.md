@@ -89,23 +89,22 @@ A language model is six ideas stacked together. No background needed:
 
 The whole repo is those six ideas, written to be read top-to-bottom.
 
-## What makes it *modern* (and not a GPT-2 clone)
+## What makes it *modern*
 
-You may have seen the original GPT/GPT-2 (2019) described somewhere. This model
-quietly replaces nearly every component with its present-day successor. Each
-swap is small and buys real quality — together they're roughly the 2019→2024 gap:
+This is the same architecture family as today's open models (Llama 3, Mistral,
+Qwen), shrunk down. Each component is the current standard choice, and each is
+implemented and **commented in plain English** in
+[`magicmath/model.py`](magicmath/model.py):
 
-| GPT-2 (2019) | this model (Llama-3 era) | in one line |
+| component | what it does | what it buys |
 |---|---|---|
-| LayerNorm | **RMSNorm** | normalize by length only — simpler, just as good |
-| learned position vectors | **RoPE** (rotary) | encode position by *rotating* vectors → relative, length-flexible |
-| multi-head attention | **Grouped-Query Attention** | fewer key/value heads → smaller memory cache |
-| GELU MLP | **SwiGLU** | a *gated* feed-forward layer → more quality per parameter |
-| biases everywhere | **no biases** | fewer params, no quality loss |
-| post-normalization | **pre-normalization** | trains stably without tricks |
+| **RMSNorm** | normalize each vector by its length | stable training, cheaply |
+| **RoPE** (rotary) | encode position by *rotating* query/key vectors | positions become relative & length-flexible |
+| **Grouped-Query Attention** | share key/value heads across query heads | a much smaller memory cache at inference |
+| **SwiGLU** | a *gated* feed-forward layer | more quality per parameter |
+| **no biases · pre-norm · tied embeddings** | lean, stable, parameter-efficient | small modern hygiene |
 
-Every one of these is implemented and **commented in plain English** in
-[`magicmath/model.py`](magicmath/model.py). If you want the deeper dive, see
+For the deeper, component-by-component walkthrough, see
 [`docs/architecture.md`](docs/architecture.md).
 
 ## Where things live

@@ -5,7 +5,7 @@ Stages (all driven by `prepare_data` below):
   1. download   stream N bytes of TinyStories off the Hugging Face hub
   2. tokenizer  train a byte-level BPE vocabulary on that text
   3. encode     turn the text into a flat array of uint16 token ids on disk
-                (train.bin / val.bin) — the classic "nanoGPT" data format
+                (train.bin / val.bin) — a simple flat binary of token ids
   4. batch      at train time, grab random windows out of those arrays
 
 TinyStories (Eldan & Li, 2023) is a synthetic dataset of simple children's
