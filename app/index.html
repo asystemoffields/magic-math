@@ -84,8 +84,9 @@
   </div>
 
   <div class="panel gen" id="genpanel">
-    <h2>talk to your model</h2>
-    <input type="text" id="prompt" value="Once upon a time" placeholder="type a prompt…">
+    <h2>prompt your model</h2>
+    <div class="sub" style="margin:-4px 0 10px">it <b>continues</b> your text — a story model, not a chatbot. start a story and let it run.</div>
+    <input type="text" id="prompt" value="Once upon a time" placeholder="start a story…">
     <div class="controls">
       <label>temperature <input type="number" id="temp" value="0.8" step="0.1" min="0" max="2" style="width:64px;background:#0b0f15;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 6px"></label>
       <label>tokens <input type="number" id="ntok" value="200" step="20" min="10" max="600" style="width:72px;background:#0b0f15;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 6px"></label>

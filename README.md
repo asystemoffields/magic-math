@@ -69,6 +69,20 @@ python -m magicmath.train_cli --preset default
 [pytorch.org](https://pytorch.org/get-started/locally/) first.)
 </details>
 
+### Then play with it
+
+Once you've trained a model, **double-click `chat.bat`** (macOS/Linux: `./chat.sh`,
+by hand: `python -m magicmath.chat`) to open a little **playground** that loads your
+trained model and lets you prompt it — completions stream in token by token.
+
+> **A note on what this model is.** It's a tiny **story** model, not a chatbot. It
+> learned exactly one skill — *given some text, predict the next word* — so it's
+> good at **continuing** text you start (give it the opening of a story and watch
+> it run). It **can't** hold a back-and-forth conversation, answer questions, or
+> follow instructions: it was never trained on dialogue, Q&A, or "assistant"
+> behavior, and it keeps no memory between prompts. Each prompt is a fresh,
+> standalone continuation. The playground says all this on the page, too.
+
 ---
 
 ## What you're actually building (the 60-second version)
@@ -117,12 +131,16 @@ magicmath/
   tokenizer.py  train our own byte-level BPE vocabulary
   data.py       stream TinyStories → token ids on disk → batches
   train.py      the training loop (loss, AdamW, schedule, eval)
-  sample.py     load a checkpoint and generate text
+  sample.py     load a checkpoint, generate / stream / compare checkpoints
+  lenses.py     poke at the trained model (tokens, next-token probs, neighbours)
   web.py        the local dashboard (stdlib http.server + SSE, no framework)
+  chat.py       the playground server for an already-trained model
   notebook.py   the live matplotlib chart for Colab
-app/index.html  the dashboard front-end (vanilla JS + canvas, no dependencies)
+app/index.html  the training dashboard front-end (vanilla JS + canvas, no deps)
+app/chat.html   the playground front-end (prompt your trained model)
 notebooks/      the Colab "Run all" notebook
-run.bat / run.sh  one-click local setup + launch
+run.bat / run.sh    one-click local setup + train
+chat.bat / chat.sh  open the playground for your trained model
 ```
 
 The entire dependency list is **three packages**: `torch`, `numpy`,

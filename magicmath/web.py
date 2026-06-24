@@ -77,6 +77,9 @@ class AppState:
         # fires a hair earlier (from inside train()), so a generate request that
         # arrives in that gap waits briefly on this instead of failing.
         self.model_ready = threading.Event()
+        # which HTML page to serve at "/" (the training dashboard by default;
+        # the chat playground overrides this).
+        self.page = INDEX_HTML
 
 
 def make_handler(state: AppState):
@@ -94,7 +97,7 @@ def make_handler(state: AppState):
         def do_GET(self):
             path = urlparse(self.path).path
             if path in ("/", "/index.html"):
-                with open(INDEX_HTML, "rb") as f:
+                with open(state.page, "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
             elif path == "/events":
                 self._stream_events()
@@ -167,6 +170,9 @@ def make_handler(state: AppState):
                 return
             model, tok, device = ready
             prompt, tokens, temperature = self._params()
+            # echo=0 suppresses the prompt echo (the playground shows the prompt
+            # itself, so it only wants the model's continuation streamed back).
+            echo = parse_qs(urlparse(self.path).query).get("echo", ["1"])[0] != "0"
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Cache-Control", "no-cache")
@@ -175,8 +181,13 @@ def make_handler(state: AppState):
             try:
                 # one generation at a time (the model isn't thread-safe)
                 with state.lock:
+                    first = True
                     for delta in generate_stream(model, tok, prompt, max_new_tokens=tokens,
                                                  temperature=temperature, device=device):
+                        if first:               # the first chunk is the prompt echo
+                            first = False
+                            if not echo:
+                                continue
                         self.wfile.write(delta.encode("utf-8"))
                         self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):

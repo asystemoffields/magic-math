@@ -71,10 +71,17 @@ def main():
     print("· installing numpy + tokenizers …")
     pip(py, "install", "-q", "numpy", "tokenizers")
 
-    print("\n· launching the dashboard …\n")
-    # Run the web module from the repo root so `magicmath` imports cleanly.
+    # `bootstrap.py chat ...` launches the playground for an already-trained
+    # model; otherwise we launch the training dashboard.
+    args = sys.argv[1:]
+    module, label = "magicmath.web", "training dashboard"
+    if args and args[0] == "chat":
+        module, label, args = "magicmath.chat", "playground", args[1:]
+
+    print(f"\n· launching the {label} …\n")
+    # Run from the repo root so `magicmath` imports cleanly.
     env = dict(os.environ, PYTHONPATH=ROOT)
-    subprocess.call([py, "-m", "magicmath.web", *sys.argv[1:]], cwd=ROOT, env=env)
+    subprocess.call([py, "-m", module, *args], cwd=ROOT, env=env)
 
 
 if __name__ == "__main__":

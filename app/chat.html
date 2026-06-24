@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>magic-math · playground</title>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b22; --line:#222b38; --ink:#e6edf3;
+    --mut:#8b97a6; --accent:#4f8cff; --warm:#ff7a59; --good:#3fb950;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;
+    align-items:baseline;gap:14px;flex-wrap:wrap}
+  header h1{margin:0;font-size:18px;letter-spacing:.3px}
+  header h1 span{color:var(--accent)}
+  .sub{color:var(--mut);font-family:var(--mono);font-size:12px}
+  .wrap{max-width:780px;margin:0 auto;padding:22px 24px;display:grid;gap:18px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .note{border-left:3px solid var(--accent)}
+  .note h2{margin:0 0 8px;font-size:15px}
+  .note p{margin:8px 0;line-height:1.55;color:#c9d3df}
+  .note b{color:var(--ink)}
+  .note .bad{color:var(--warm)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .chip{background:#0b0f15;border:1px solid var(--line);color:var(--mut);border-radius:999px;
+    padding:6px 12px;font-size:13px;cursor:pointer;font-family:var(--mono)}
+  .chip:hover{color:var(--ink);border-color:var(--accent)}
+  textarea{width:100%;min-height:74px;resize:vertical;background:#0b0f15;border:1px solid var(--line);
+    color:var(--ink);border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:14px;line-height:1.5}
+  .controls{display:flex;gap:14px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .controls label{color:var(--mut);font-size:13px;font-family:var(--mono);display:flex;align-items:center;gap:6px}
+  .controls input[type=number]{width:64px;background:#0b0f15;border:1px solid var(--line);color:var(--ink);
+    border-radius:6px;padding:5px 7px;font-family:var(--mono)}
+  button{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:10px 20px;
+    font-size:14px;font-weight:600;cursor:pointer;margin-left:auto}
+  button:disabled{background:#33404f;cursor:default}
+  .out{min-height:90px;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);
+    font-size:14px;line-height:1.6}
+  .out .you{color:var(--mut)}      /* your prompt */
+  .out .model{color:var(--ink)}    /* what the model wrote */
+  .out .cursor{color:var(--accent)}
+  .placeholder{color:var(--mut)}
+  footer{color:var(--mut);font-size:12px;text-align:center;padding:8px 0 24px}
+  footer a{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>magic&#8209;<span>math</span> playground</h1>
+  <div class="sub" id="modelinfo">loading…</div>
+</header>
+
+<div class="wrap">
+
+  <div class="panel note">
+    <h2>This is a tiny <b>story</b> model — not a chatbot 🪄</h2>
+    <p>You trained it from scratch on short children's stories, where it learned
+       exactly one skill: <b>given some text, guess the next word</b>. So it's good at
+       one thing — <b>continuing</b> text you start. Give it the beginning of a story
+       and watch it run with it.</p>
+    <p>What it <span class="bad">can't</span> do: hold a back-and-forth
+       conversation, answer questions, or follow instructions. It was never shown
+       dialogue, Q&amp;A, or "assistant" behavior, and it keeps <b>no memory between
+       prompts</b> — every prompt is a fresh, standalone continuation. Ask it
+       <i>"What's the capital of France?"</i> and you'll just get… more story.</p>
+    <p class="sub">Prompt it like the <b>start of a story</b>, e.g.:</p>
+    <div class="chips" id="examples">
+      <span class="chip">Once upon a time, a little robot</span>
+      <span class="chip">The cat sat on the</span>
+      <span class="chip">Lily found a magic</span>
+      <span class="chip">One day, a tiny dragon</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <textarea id="prompt" placeholder="Start a story…">Once upon a time, a little robot</textarea>
+    <div class="controls">
+      <label>creativity (temperature)
+        <input type="number" id="temp" value="0.8" step="0.1" min="0" max="1.5"></label>
+      <label>length
+        <input type="number" id="ntok" value="200" step="20" min="20" max="600"></label>
+      <button id="go">continue the story →</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="out" id="out"><span class="placeholder">the model's continuation appears here…</span></div>
+  </div>
+
+  <footer>
+    a model you trained yourself ·
+    <a href="https://github.com/asystemoffields/magic-math">magic-math on GitHub</a>
+  </footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+
+// model info in the header (param count etc. come from a tiny endpoint-free
+// guess: we just label it; the server prints the real numbers in the terminal)
+$('modelinfo').textContent='your trained story model · prompt it below';
+
+// example chips fill the prompt
+document.querySelectorAll('#examples .chip').forEach(c=>{
+  c.onclick=()=>{ $('prompt').value=c.textContent; $('prompt').focus(); };
+});
+
+let busy=false;
+async function run(){
+  if(busy) return; busy=true;
+  const btn=$('go'); btn.disabled=true; btn.textContent='writing…';
+  const out=$('out'); out.innerHTML='';
+  const you=document.createElement('span'); you.className='you';
+  const model=document.createElement('span'); model.className='model';
+  const cur=document.createElement('span'); cur.className='cursor'; cur.textContent='▌';
+  you.textContent=$('prompt').value;            // show your prompt (muted)…
+  out.append(you, model, cur);                  // …then stream the continuation
+  try{
+    const q=new URLSearchParams({prompt:$('prompt').value, tokens:$('ntok').value,
+      temperature:$('temp').value, echo:'0'});  // echo=0 → only the continuation
+    const r=await fetch('/generate_stream?'+q.toString());
+    if(!r.ok){ model.textContent=' ['+((await r.json().catch(()=>({}))).error||'not ready')+']'; }
+    else{
+      const reader=r.body.getReader(), dec=new TextDecoder();
+      for(;;){ const {value,done}=await reader.read(); if(done) break;
+        model.textContent+=dec.decode(value,{stream:true});
+        cur.scrollIntoView({block:'nearest'}); }
+    }
+  }catch(e){ model.textContent=' [error: '+e+']'; }
+  cur.remove();
+  btn.disabled=false; btn.textContent='continue the story →'; busy=false;
+}
+$('go').onclick=run;
+// Ctrl/Cmd+Enter to generate
+$('prompt').addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter') run();
+});
+</script>
+</body>
+</html>
