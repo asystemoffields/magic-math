@@ -1,0 +1,21 @@
+# virtual environment created by run.bat / run.sh
+.venv/
+
+# downloaded data, tokenizers, and token bins
+data/
+*.bin
+*.txt
+!requirements.txt
+
+# trained checkpoints
+out/
+*.pt
+
+# python noise
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# os noise
+.DS_Store
+Thumbs.db

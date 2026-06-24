@@ -1,0 +1,15 @@
+# The entire dependency list. Three packages.
+#
+#   torch       the neural-network engine (tensors, autograd, GPU kernels)
+#   numpy       fast arrays — used for the on-disk token data
+#   tokenizers  the Rust-backed BPE trainer for our vocabulary
+#
+# The local launcher (run.bat / run.sh) installs torch with CUDA automatically
+# when it sees an NVIDIA GPU. If you're installing by hand and have a GPU, get
+# the CUDA build from https://pytorch.org/get-started/locally/ first.
+#
+# matplotlib is only needed for the Colab notebook's live plot, and Colab
+# already ships it — so it's intentionally not required here.
+torch
+numpy
+tokenizers
