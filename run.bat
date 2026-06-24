@@ -7,22 +7,21 @@ REM The only thing you need installed first is Python 3.10+.
 setlocal
 cd /d "%~dp0"
 
-where py >nul 2>nul
-if %errorlevel%==0 (
-  py scripts\bootstrap.py %*
-) else (
-  where python >nul 2>nul
-  if %errorlevel%==0 (
-    python scripts\bootstrap.py %*
-  ) else (
-    echo.
-    echo  Python was not found. Install it from https://www.python.org/downloads/
-    echo  ^(tick "Add Python to PATH" in the installer^), then run this again.
-    echo.
-    pause
-    exit /b 1
-  )
+REM Find a Python launcher (prefer the Windows "py" launcher, then "python").
+set "PYEXE="
+where py >nul 2>nul && set "PYEXE=py"
+if not defined PYEXE where python >nul 2>nul && set "PYEXE=python"
+
+if not defined PYEXE (
+  echo.
+  echo  Python was not found. Install it from https://www.python.org/downloads/
+  echo  ^(tick "Add Python to PATH" in the installer^), then run this again.
+  echo.
+  pause
+  exit /b 1
 )
+
+%PYEXE% scripts\bootstrap.py %*
 
 echo.
 pause
