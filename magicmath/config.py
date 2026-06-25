@@ -2,8 +2,9 @@
 Configuration for the model and the training run.
 
 Everything that defines *what* we build and *how hard* we train lives here, in
-two small dataclasses, plus three named presets you can pick from. If you only
-read one file to understand the knobs, read this one.
+two small dataclasses plus `get_configs()`, which returns the model + training
+config (with optional keyword overrides). If you only read one file to
+understand the knobs, read this one.
 
 Nothing here imports torch, so it is cheap to import and easy to inspect.
 """
@@ -54,7 +55,7 @@ class ModelConfig:
 class TrainConfig:
     """Everything about the *run*: data, optimizer, schedule, logging."""
 
-    preset: str = "default"
+    preset: str = "default"   # internal tag used in cache / checkpoint filenames
 
     # --- data ---------------------------------------------------------------
     # We stream this many bytes of TinyStories text off the Hugging Face hub.
@@ -94,62 +95,38 @@ class TrainConfig:
 
 
 # ----------------------------------------------------------------------------
-# Presets — the three sizes you'll actually pick from
+# The model — one configuration: a ~12M-parameter Llama-style decoder
 # ----------------------------------------------------------------------------
-# Times are rough, for the full run, and depend heavily on the GPU.
-#   nano    ~1.6M params   quick taste / smoke test     ~2 min A100   ~5 min T4
-#   small   ~7M params     coherent-ish, free Colab     ~10 min A100  ~30 min T4
-#   default ~12M params    clearly coherent stories     ~25 min A100  ~75 min T4
-_PRESETS = {
-    "nano": dict(
-        model=dict(vocab_size=2048, d_model=128, n_layers=4, n_heads=4,
-                   n_kv_heads=2, max_seq_len=128),
-        train=dict(data_bytes=20_000_000, seq_len=128, batch_size=32, max_steps=1000,
-                   warmup_steps=50, lr=1e-3, min_lr=1e-4,
-                   log_interval=10, eval_interval=200, sample_interval=200),
-    ),
-    "small": dict(
-        model=dict(vocab_size=8192, d_model=256, n_layers=6, n_heads=8,
-                   n_kv_heads=2, max_seq_len=256),
-        train=dict(data_bytes=120_000_000, seq_len=256, batch_size=64, max_steps=4000,
-                   warmup_steps=150, lr=8e-4, min_lr=8e-5,
-                   log_interval=10, eval_interval=500, sample_interval=500),
-    ),
-    "default": dict(
-        model=dict(vocab_size=8192, d_model=384, n_layers=6, n_heads=6,
-                   n_kv_heads=2, max_seq_len=512),
-        train=dict(data_bytes=250_000_000, seq_len=512, batch_size=64, max_steps=6000,
-                   warmup_steps=200, lr=6e-4, min_lr=6e-5,
-                   log_interval=10, eval_interval=750, sample_interval=750),
-    ),
-}
+def get_configs(**overrides):
+    """Return (ModelConfig, TrainConfig) for the model — a ~12M-parameter,
+    Llama-style decoder trained on TinyStories.
 
-
-def get_configs(preset: str = "default", **overrides):
-    """Return (ModelConfig, TrainConfig) for a named preset.
-
-    Any keyword overrides are applied to *whichever* config defines that field,
-    so e.g. get_configs("nano", max_steps=50, d_model=64) just works.
+    Pass keyword overrides to tweak any field of either config, e.g.
+    get_configs(save_checkpoints=True) or get_configs(max_steps=3000, d_model=512).
     """
-    if preset not in _PRESETS:
-        raise ValueError(f"unknown preset {preset!r}; choose from {list(_PRESETS)}")
-    spec = _PRESETS[preset]
-    model = ModelConfig(**spec["model"])
-    train = TrainConfig(preset=preset, **spec["train"])
-    # training context length follows the model's window
-    train = replace(train, seq_len=model.max_seq_len)
+    model_spec = dict(vocab_size=8192, d_model=384, n_layers=6, n_heads=6,
+                      n_kv_heads=2, max_seq_len=512)
+    train_spec = dict(data_bytes=250_000_000, batch_size=64, max_steps=6000,
+                      warmup_steps=200, lr=6e-4, min_lr=6e-5,
+                      log_interval=10, eval_interval=750, sample_interval=750)
 
+    # Merge all overrides into the spec dicts *before* constructing the configs,
+    # so we never build an intermediate, half-overridden config that trips a
+    # consistency check (e.g. d_model set but n_heads not yet).
     model_fields = set(ModelConfig.__dataclass_fields__)
     train_fields = set(TrainConfig.__dataclass_fields__)
     for k, v in overrides.items():
         if k in model_fields:
-            model = replace(model, **{k: v})
+            model_spec[k] = v
         elif k in train_fields:
-            train = replace(train, **{k: v})
+            train_spec[k] = v
         else:
             raise KeyError(f"{k!r} is not a field of ModelConfig or TrainConfig")
-    # re-run derivations after overrides
-    model = ModelConfig(**{f: getattr(model, f) for f in model_fields if f != "d_ff"})
+
+    model = ModelConfig(**model_spec)
+    # training context length follows the model's window unless overridden
+    train_spec.setdefault("seq_len", model.max_seq_len)
+    train = TrainConfig(**train_spec)
     if train.seq_len > model.max_seq_len:
         train = replace(train, seq_len=model.max_seq_len)
     return model, train

@@ -11,7 +11,7 @@ Run it directly:   python scripts/bootstrap.py
 or via the wrappers: run.bat  (Windows)   /   ./run.sh  (macOS/Linux)
 
 Anything after the script name is forwarded to the dashboard, e.g.:
-  python scripts/bootstrap.py --preset small
+  python scripts/bootstrap.py --save-checkpoints
 """
 
 import os

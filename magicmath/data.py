@@ -177,11 +177,10 @@ def prepare_data(train_cfg, data_dir: str = "data", on_event=None,
 
 
 def _vocab_from_cfg(train_cfg) -> int:
-    # The vocab size lives on the *model* config, but prepare_data only takes
-    # the train config in the notebook flow; we stash it on train_cfg via the
-    # preset table. Fall back to a sensible default.
+    # The vocab size lives on the *model* config; if prepare_data wasn't told it
+    # explicitly, fall back to the model's default.
     from .config import get_configs
-    model_cfg, _ = get_configs(train_cfg.preset)
+    model_cfg, _ = get_configs()
     return model_cfg.vocab_size
 
 

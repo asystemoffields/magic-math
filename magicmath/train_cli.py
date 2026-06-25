@@ -1,8 +1,8 @@
 """
 Headless training from the terminal — no browser, just text output.
 
-    python -m magicmath.train_cli --preset default
-    python -m magicmath.train_cli --preset nano --max-steps 200
+    python -m magicmath.train_cli
+    python -m magicmath.train_cli --max-steps 2000   # a shorter run
 
 This is the same code the notebook and the web dashboard run; it just uses the
 plain-text `console_reporter` instead of a chart. Handy on a remote box over SSH.
@@ -20,7 +20,6 @@ from .events import console_reporter
 
 def main():
     ap = argparse.ArgumentParser(description="Train a magic-math model in the terminal.")
-    ap.add_argument("--preset", default="default", choices=["nano", "small", "default"])
     ap.add_argument("--max-steps", type=int, default=None, help="override the step count")
     ap.add_argument("--data-dir", default="data")
     ap.add_argument("--device", default=None, help="cuda / cpu (auto-detected if omitted)")
@@ -34,7 +33,7 @@ def main():
     if args.save_checkpoints:
         overrides["save_checkpoints"] = True
 
-    model_cfg, train_cfg = get_configs(args.preset, **overrides)
+    model_cfg, train_cfg = get_configs(**overrides)
     device = args.device or pick_device()
     print(f"device: {device}")
 

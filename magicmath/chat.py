@@ -7,7 +7,6 @@ reuses the same streaming endpoint, so completions arrive token by token.
 
     python -m magicmath.chat                      # newest model in out/
     python -m magicmath.chat --ckpt out/model-default.pt
-    python -m magicmath.chat --preset small       # prefer the 'small' model
 
 Important framing (and the page says this loudly): this is a *story-continuation*
 model trained on TinyStories, not a chat assistant. It continues whatever text
@@ -88,13 +87,12 @@ def serve_chat(ckpt: str | None = None, preset: str | None = None,
 def main():
     ap = argparse.ArgumentParser(description="Playground for a trained magic-math model.")
     ap.add_argument("--ckpt", default=None, help="checkpoint path (default: newest in out/)")
-    ap.add_argument("--preset", default=None, help="prefer the model trained for this preset")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--out-dir", default="out")
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
-    serve_chat(args.ckpt, args.preset, args.host, args.port,
+    serve_chat(args.ckpt, None, args.host, args.port,
                not args.no_browser, args.out_dir)
 
 

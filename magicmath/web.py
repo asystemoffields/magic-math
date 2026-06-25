@@ -196,7 +196,7 @@ def make_handler(state: AppState):
     return Handler
 
 
-def _run_training(state: AppState, preset: str, overrides: dict):
+def _run_training(state: AppState, overrides: dict):
     """Runs in a background thread: prepare data, train, expose the model."""
     from .config import get_configs
     from .data import prepare_data
@@ -206,7 +206,7 @@ def _run_training(state: AppState, preset: str, overrides: dict):
     hub = state.hub
     reporter = fan_out(hub.publish, console_reporter)
     try:
-        model_cfg, train_cfg = get_configs(preset, **overrides)
+        model_cfg, train_cfg = get_configs(**overrides)
         device = pick_device()
         data = prepare_data(train_cfg, on_event=reporter, vocab_size=model_cfg.vocab_size)
         result = train(model_cfg, train_cfg, data, device=device, on_event=reporter)
@@ -221,7 +221,7 @@ def _run_training(state: AppState, preset: str, overrides: dict):
         hub.publish({"type": "phase", "phase": "error", "msg": f"{type(e).__name__}: {e}"})
 
 
-def serve(preset: str = "default", host: str = "127.0.0.1", port: int = 8000,
+def serve(host: str = "127.0.0.1", port: int = 8000,
           open_browser: bool = True, overrides: dict | None = None):
     hub = EventHub()
     state = AppState(hub)
@@ -229,7 +229,7 @@ def serve(preset: str = "default", host: str = "127.0.0.1", port: int = 8000,
 
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://{host}:{port}"
-    print(f"\n  magic-math dashboard:  {url}\n  (training '{preset}' — watch it in your browser)\n")
+    print(f"\n  magic-math dashboard:  {url}\n  (training the model — watch it in your browser)\n")
     if open_browser:
         try:
             webbrowser.open(url)
@@ -237,7 +237,7 @@ def serve(preset: str = "default", host: str = "127.0.0.1", port: int = 8000,
             pass
 
     train_thread = threading.Thread(
-        target=_run_training, args=(state, preset, overrides or {}), daemon=True)
+        target=_run_training, args=(state, overrides or {}), daemon=True)
     train_thread.start()
 
     try:
@@ -252,7 +252,6 @@ def serve(preset: str = "default", host: str = "127.0.0.1", port: int = 8000,
 
 def main():
     ap = argparse.ArgumentParser(description="magic-math local training dashboard")
-    ap.add_argument("--preset", default="default", choices=["nano", "small", "default"])
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--no-browser", action="store_true")
@@ -266,7 +265,7 @@ def main():
         overrides["max_steps"] = args.max_steps
     if args.save_checkpoints:
         overrides["save_checkpoints"] = True
-    serve(preset=args.preset, host=args.host, port=args.port,
+    serve(host=args.host, port=args.port,
           open_browser=not args.no_browser, overrides=overrides)
 
 

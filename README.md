@@ -2,13 +2,13 @@
 
 **Train a small but genuinely modern language model from scratch — until it
 writes its own little stories.** No pretrained weights, no magic downloads of
-someone else's model. You start from random numbers and a pile of text, and a
-few minutes later you have a model that strings together coherent English.
+someone else's model. You start from random numbers and a pile of text, and you
+end up with a model that strings together coherent English.
 
 It's the same architecture family as Llama 3 and Mistral — just shrunk to about
-**12 million parameters** so a full training run finishes in minutes, not days.
-And it's built to be *read*: every file explains what it's doing and why,
-assuming you know what a vector is but nothing else about machine learning.
+**12 million parameters**, small enough to train from scratch end to end
+yourself. And it's built to be *read*: every file explains what it's doing and
+why, assuming you know what a vector is but nothing else about machine learning.
 
 Two ways to run it. Pick one:
 
@@ -22,15 +22,11 @@ Everything happens on a free Google Colab GPU. You need nothing installed.
    [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/asystemoffields/magic-math/blob/main/notebooks/magic_math.ipynb)
 2. In the menu: **Runtime → Change runtime type → T4 GPU** (it's free), then
    **Runtime → Run all**.
-3. Scroll down and watch. A loss curve falls, and every minute or so the model
+3. Scroll down and watch. A loss curve falls, and every so often the model
    prints a new story sample that's a little more coherent than the last.
 
 That's the whole thing. When it finishes, the last cell lets you type a prompt
 and read what your model writes back.
-
-> On the free **T4**, use the `small` preset (the notebook's default, ~30 min).
-> With Colab Pro's **A100**, switch to `default` for noticeably better stories
-> (~25 min).
 
 ---
 
@@ -54,16 +50,14 @@ loss chart, throughput, the checkpoint samples, and a box to chat with your
 model that **streams the reply token by token** (like the app you're used to)
 once it's done.
 
-Want a quick taste first? `run.bat --preset nano` (a couple of minutes).
-
 <details>
 <summary>Prefer to drive it by hand?</summary>
 
 ```bash
-pip install -r requirements.txt          # torch, numpy, tokenizers
-python -m magicmath.web --preset default # opens the dashboard
+pip install -r requirements.txt   # torch, numpy, tokenizers
+python -m magicmath.web           # opens the dashboard
 # or, no web UI, just the terminal:
-python -m magicmath.train_cli --preset default
+python -m magicmath.train_cli
 ```
 (If you have a GPU, install the CUDA build of torch from
 [pytorch.org](https://pytorch.org/get-started/locally/) first.)
@@ -126,7 +120,7 @@ For the deeper, component-by-component walkthrough, see
 
 ```
 magicmath/
-  config.py     all the knobs + the nano/small/default presets   ← start here
+  config.py     all the model + training knobs                   ← start here
   model.py      the transformer: RMSNorm, RoPE, GQA, SwiGLU       ← the good part
   tokenizer.py  train our own byte-level BPE vocabulary
   data.py       stream TinyStories → token ids on disk → batches
@@ -146,15 +140,13 @@ chat.bat / chat.sh  open the playground for your trained model
 The entire dependency list is **three packages**: `torch`, `numpy`,
 `tokenizers`. The local dashboard uses only Python's standard library.
 
-## The three presets
+## The model
 
-| preset | params | data | ~T4 | ~A100 | result |
-|---|---:|---:|---:|---:|---|
-| `nano` | ~1.6M | 20 MB | ~5 min | ~2 min | semi-words; proves the pipeline |
-| `small` | ~7M | 120 MB | ~30 min | ~10 min | short coherent fragments |
-| `default` | ~12M | 250 MB | ~75 min | ~25 min | actual little stories |
-
-Change the preset in the notebook's dropdown, or pass `--preset` to `run.bat`.
+One configuration: a **~12M-parameter** Llama-style decoder, trained on ~250 MB
+of TinyStories (≈60M tokens). Big enough to write coherent little stories, small
+enough to train from scratch yourself. Tweak it in
+[`magicmath/config.py`](magicmath/config.py) — `get_configs(...)` takes keyword
+overrides for any field (depth, width, steps, …).
 
 ## Watching it learn (checkpoints)
 
@@ -172,9 +164,9 @@ steps after — and those snapshots **accumulate** so you can scroll the full ar
 
 By default only the *final* model is written to `out/`. To also save the
 **weights at every checkpoint** (so you can reload an early model and compare),
-add `save_checkpoints=True` — `get_configs(PRESET, save_checkpoints=True)` in the
+add `save_checkpoints=True` — `get_configs(save_checkpoints=True)` in the
 notebook, or `run.bat --save-checkpoints` locally. Each snapshot then writes
-`out/model-<preset>-step<N>.pt`.
+`out/model-default-step<N>.pt`.
 
 ## Peek inside your model
 
@@ -198,8 +190,8 @@ This is a toy you're meant to take apart, and it's small enough that Claude can
 hold the whole thing in its head. Open the folder in **Claude Code**, or just
 paste files into a Claude chat, and try asking:
 
-- *“In `magicmath/config.py`, add a preset that's deeper but narrower, then tell
-  me what you'd expect to happen to the loss.”*
+- *“In `magicmath/config.py`, make the model deeper but narrower, then tell me
+  what you'd expect to happen to the loss.”*
 - *“Walk me through `apply_rope` in `model.py` line by line.”*
 - *“Turn off weight tying (`tie_embeddings`) and re-run. Did it matter?”*
 - *“Add top-p / nucleus sampling to `sample.py`.”*
@@ -221,11 +213,11 @@ only raw TinyStories text.
 
 **Why TinyStories?** It's a dataset of simple synthetic children's stories,
 designed so that *tiny* models can learn fluent, grammatical English. It's what
-makes “coherent sentences in minutes” possible at this size.
+makes coherent sentences possible at this small size.
 
-**It said something weird / repeated itself.** It's a 12M-parameter model that
-trained for a few minutes — being occasionally weird is expected and kind of the
-charm. Train `default` for longer, or raise/lower `temperature` when sampling.
+**It said something weird / repeated itself.** It's only a 12M-parameter model —
+being occasionally weird is expected and kind of the charm. Train it for longer
+(raise `max_steps`), or raise/lower `temperature` when sampling.
 
 ---
 

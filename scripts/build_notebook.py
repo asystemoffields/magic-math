@@ -24,10 +24,9 @@ CELLS = [
     md(
         "# magic&#8209;math — train a language model from scratch 🪄",
         "",
-        "This notebook trains a **small but genuinely modern** language model "
-        "from nothing — no pretrained weights anywhere — until it can write its "
-        "own little stories. Same architecture family as Llama 3 and Mistral, "
-        "just shrunk to ~12M parameters so a full run finishes in minutes.",
+        "This notebook trains a small language model to write its own little "
+        "stories. About 12M parameters, trained from scratch right here on a free "
+        "GPU — no pretrained weights anywhere.",
         "",
         "**To run it:** in the menu go to **Runtime → Change runtime type → "
         "T4 GPU** (free), then **Runtime → Run all**. That's the whole thing. "
@@ -40,7 +39,7 @@ CELLS = [
     md(
         "## How a language model works, before we build one",
         "",
-        "Six ideas. That's the whole game:",
+        "Six ideas:",
         "",
         "1. **Tokens.** Text is chopped into a few thousand recurring chunks "
         "(`the`, ` said`, `ing`). Each chunk is just an integer id. The model "
@@ -80,29 +79,21 @@ CELLS = [
         "    print('No GPU! Go to Runtime > Change runtime type > T4 GPU, then Run all again.')",
     ),
     md(
-        "## Pick a size",
+        "## Build the model",
         "",
-        "| preset | params | what you get | ~time on T4 | ~time on A100 |",
-        "|---|---|---|---|---|",
-        "| `nano` | ~1.6M | a quick taste; semi-words | ~5 min | ~2 min |",
-        "| `small` | ~7M | short coherent fragments | ~30 min | ~10 min |",
-        "| `default` | ~12M | actual little stories | ~75 min | ~25 min |",
-        "",
-        "On a **free T4**, start with `small`. If you have **Colab Pro with an "
-        "A100**, use `default`. `nano` is great just to see the whole thing run "
-        "through in a couple of minutes.",
+        "A ~12M-parameter Llama-style model — small enough to train from scratch "
+        "right here, big enough to write coherent little stories. The cell below "
+        "builds its config (and turns on checkpoint saving so Step 6 can compare "
+        "an early checkpoint against a late one).",
     ),
     code(
         "from magicmath.config import get_configs, config_summary",
         "import json",
         "",
-        'PRESET = "small"  # @param ["nano", "small", "default"]',
-        "",
         "# save_checkpoints=True keeps the model's weights at every checkpoint, so",
         "# Step 6 can compare an early one against a late one.",
-        "model_cfg, train_cfg = get_configs(PRESET, save_checkpoints=True)",
+        "model_cfg, train_cfg = get_configs(save_checkpoints=True)",
         "print(json.dumps(config_summary(model_cfg, train_cfg), indent=2))",
-        form=True,
     ),
     md(
         "## Step 1 — build a vocabulary and prepare the data",
@@ -155,10 +146,9 @@ CELLS = [
         "whole arc from gibberish to little sentences. That transition is the single "
         "most instructive thing here.",
         "",
-        "*(Want the model's actual weights saved at each checkpoint too, so you can "
-        "reload an early one? Re-make the configs as "
-        "`get_configs(PRESET, save_checkpoints=True)` and each snapshot also writes "
-        "`out/model-…-step<N>.pt`.)*",
+        "*(We set `save_checkpoints=True` earlier, so the model's weights are also "
+        "saved at each checkpoint to `out/model-…-step<N>.pt` — that's what Step 6 "
+        "uses to compare an early model against a late one.)*",
     ),
     code(
         "from magicmath.train import train",
@@ -220,7 +210,7 @@ CELLS = [
     ),
     code(
         "from magicmath import sample",
-        "ckpts = sample.list_checkpoints(train_cfg.out_dir, PRESET)",
+        "ckpts = sample.list_checkpoints(train_cfg.out_dir, train_cfg.preset)",
         'print("saved checkpoints at steps:", [s for s, _ in ckpts])',
         "",
         'prompt = "The cat sat on the"  # @param {type:"string"}',
@@ -232,11 +222,8 @@ CELLS = [
         form=True,
     ),
     md(
-        "## What makes this model *modern*",
-        "",
         "This is the same architecture family as today's open models (Llama 3, "
-        "Mistral, Qwen), just small. Each component is the current standard "
-        "choice, and each one buys real quality:",
+        "Mistral, Qwen), just small scale:",
         "",
         "- **RMSNorm** — normalize each vector by its length (no mean, no bias). "
         "Keeps training stable, cheaply.",
@@ -257,10 +244,10 @@ CELLS = [
         "This repo is meant to be poked at. Open it in **Claude Code**, or paste "
         "files into a Claude conversation, and try prompts like:",
         "",
-        "- *“In `magicmath/config.py`, make a new preset that's deeper (more "
-        "layers) but narrower. What happens to the loss?”*",
+        "- *“In `magicmath/config.py`, make the model deeper (more layers) but "
+        "narrower. What happens to the loss?”*",
         "- *“Explain what `apply_rope` in `model.py` is doing, line by line.”*",
-        "- *“Turn off weight tying and qk-norm and rerun — did it matter?”*",
+        "- *“let's train this model on a different dataset”*",
         "- *“Add top-p (nucleus) sampling to `sample.py`.”*",
         "",
         "Re-run this notebook after any change. Full repo: "
