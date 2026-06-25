@@ -25,7 +25,7 @@ CELLS = [
         "# magic&#8209;math — train a language model from scratch 🪄",
         "",
         "This notebook trains a small language model to write its own little "
-        "stories. About 12M parameters.",
+        "stories. About 27M parameters.",
         "",
         "**To run it:** in the menu go to **Runtime → Change runtime type → "
         "A100** (free), then **Runtime → Run all**. Scroll down and watch the loss "
@@ -43,8 +43,7 @@ CELLS = [
         "(`the`, ` said`, `ing`). Each chunk is just an integer id. The model "
         "only ever sees integers.",
         "2. **Vectors.** Every token id is looked up as a vector — a point in a "
-        "few-hundred-dimensional space. Similar tokens end up near each other. "
-        "(This is the part you already know.)",
+        "few-hundred-dimensional space. Similar tokens end up near each other.",
         "3. **Attention.** At each position, the model looks back over the "
         "earlier tokens and pulls in the ones that are relevant — *this* is how "
         "it uses context.",
@@ -79,7 +78,7 @@ CELLS = [
     md(
         "## Build the model",
         "",
-        "A ~12M-parameters — small enough to train from scratch right here, big "
+        "A ~27M-parameters — small enough to train from scratch right here, big "
         "enough to write coherent little stories. The cell below builds its config "
         "(and turns on checkpoint saving so Step 6 can compare an early checkpoint "
         "against a late one).",
@@ -140,10 +139,8 @@ CELLS = [
         "",
         "**Below the chart**, the model's writing is sampled at each *checkpoint* — "
         "**densely at first** (steps 0, 1, 2, 4, 8, 16, …) so you catch the fast early "
-        "jump from noise to words, then at a steady cadence — and the snapshots "
-        "*accumulate*. When it finishes, scroll that list to see the whole arc from "
-        "gibberish to little sentences. That transition is the single most instructive "
-        "thing here.",
+        "jump from noise to words! When it finishes, scroll that list to see the whole "
+        "arc from gibberish to little sentences.",
         "",
         "*(We set `save_checkpoints=True` earlier, so the model's weights are also "
         "saved at each checkpoint to `out/model-…-step<N>.pt` — that's what Step 6 "
@@ -271,4 +268,5 @@ NB = {
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(OUT, "w", encoding="utf-8") as f:
     json.dump(NB, f, indent=1, ensure_ascii=False)
+    f.write("\n")
 print("wrote", OUT, "with", len(CELLS), "cells")

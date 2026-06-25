@@ -6,7 +6,7 @@ someone else's model. You start from random numbers and a pile of text, and you
 end up with a model that strings together coherent English.
 
 It's the same architecture family as Llama 3 and Mistral — just shrunk to about
-**12 million parameters**, small enough to train from scratch end to end
+**27 million parameters**, small enough to train from scratch end to end
 yourself. And it's built to be *read*: every file explains what it's doing and
 why, assuming you know what a vector is but nothing else about machine learning.
 
@@ -142,9 +142,9 @@ The entire dependency list is **three packages**: `torch`, `numpy`,
 
 ## The model
 
-One configuration: a **~12M-parameter** Llama-style decoder (RMSNorm, RoPE, GQA,
-SwiGLU, QK-norm), trained on ~500 MB of TinyStories with weight-averaging (EMA).
-Big enough to write coherent little stories, small enough to train from scratch
+One configuration: a **~27M-parameter** Llama-style decoder (RMSNorm, RoPE, GQA,
+SwiGLU, QK-norm), trained on ~1 GB of TinyStories with weight-averaging (EMA).
+Big enough to keep a short story on the rails, small enough to train from scratch
 yourself.
 
 It's tuned for **quality over speed** — the run is a deliberate overtrain, and
@@ -220,7 +220,7 @@ only raw TinyStories text.
 designed so that *tiny* models can learn fluent, grammatical English. It's what
 makes coherent sentences possible at this small size.
 
-**It said something weird / repeated itself.** It's only a 12M-parameter model —
+**It said something weird / repeated itself.** It's only a 27M-parameter model —
 being occasionally weird is expected and kind of the charm. Generation already
 uses nucleus (top-p) sampling and a repetition penalty to keep it from looping;
 you can also train it longer (raise `max_steps`) or adjust `temperature` when

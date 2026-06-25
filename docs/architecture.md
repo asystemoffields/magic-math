@@ -34,7 +34,7 @@ vocabulary ourselves (`magicmath/tokenizer.py`):
 
 This is exactly how production tokenizers (Llama, Mistral, …) are made; ours is
 just smaller (2k–8k tokens) and trained on TinyStories. A smaller vocabulary
-means a smaller embedding table, which matters when the whole model is 12M
+means a smaller embedding table, which matters when the whole model is 27M
 parameters.
 
 ## 2. Embedding — ids become vectors

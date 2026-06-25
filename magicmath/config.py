@@ -23,9 +23,9 @@ class ModelConfig:
     """The architecture. These numbers fully determine the parameter count."""
 
     vocab_size: int = 8192          # size of the tokenizer's vocabulary
-    d_model: int = 384              # the "width" of the model (residual stream)
-    n_layers: int = 6               # number of transformer blocks (the "depth")
-    n_heads: int = 6                # number of *query* attention heads
+    d_model: int = 512              # the "width" of the model (residual stream)
+    n_layers: int = 8               # number of transformer blocks (the "depth")
+    n_heads: int = 8                # number of *query* attention heads
     n_kv_heads: int = 2             # number of *key/value* heads  -> GQA when < n_heads
     d_ff: Optional[int] = None      # SwiGLU hidden size; if None, derived from d_model
     max_seq_len: int = 512          # the context window (in tokens)
@@ -59,17 +59,17 @@ class TrainConfig:
 
     # --- data ---------------------------------------------------------------
     # We stream this many bytes of TinyStories text off the Hugging Face hub.
-    # ~4 bytes per token, so 250 MB ≈ 60M tokens of training data.
-    data_bytes: int = 250_000_000
+    # ~4 bytes per token, so 1 GB ≈ 250M tokens of training data.
+    data_bytes: int = 1_000_000_000
     seq_len: int = 512              # training context length (must be <= max_seq_len)
     batch_size: int = 64            # sequences per micro-batch
     grad_accum: int = 1             # micro-batches per optimizer step (effective batch = batch*accum)
 
     # --- optimizer / schedule ----------------------------------------------
-    max_steps: int = 6000           # number of optimizer steps
+    max_steps: int = 15000          # number of optimizer steps
     lr: float = 6e-4                # peak learning rate
     min_lr: float = 6e-5            # final learning rate (cosine floor)
-    warmup_steps: int = 200         # linear warmup before the cosine decay
+    warmup_steps: int = 400         # linear warmup before the cosine decay
     weight_decay: float = 0.1
     beta1: float = 0.9
     beta2: float = 0.95
@@ -96,19 +96,19 @@ class TrainConfig:
 
 
 # ----------------------------------------------------------------------------
-# The model — one configuration: a ~12M-parameter Llama-style decoder
+# The model — one configuration: a ~27M-parameter Llama-style decoder
 # ----------------------------------------------------------------------------
 def get_configs(**overrides):
-    """Return (ModelConfig, TrainConfig) for the model — a ~12M-parameter,
+    """Return (ModelConfig, TrainConfig) for the model — a ~27M-parameter,
     Llama-style decoder trained on TinyStories.
 
     Pass keyword overrides to tweak any field of either config, e.g.
     get_configs(save_checkpoints=True) or get_configs(max_steps=3000, d_model=512).
     """
-    model_spec = dict(vocab_size=8192, d_model=384, n_layers=6, n_heads=6,
+    model_spec = dict(vocab_size=8192, d_model=512, n_layers=8, n_heads=8,
                       n_kv_heads=2, max_seq_len=512, qk_norm=True)
-    train_spec = dict(data_bytes=500_000_000, batch_size=64, max_steps=10000,
-                      warmup_steps=300, lr=6e-4, min_lr=6e-5,
+    train_spec = dict(data_bytes=1_000_000_000, batch_size=64, max_steps=15000,
+                      warmup_steps=400, lr=6e-4, min_lr=6e-5,
                       log_interval=10, sample_interval=750)
 
     # Merge all overrides into the spec dicts *before* constructing the configs,
