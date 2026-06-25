@@ -1,9 +1,12 @@
 """
-The notebook front end — a reporter that draws a live loss curve in Colab.
+The notebook front end — a flicker-free live reporter for Colab.
 
-`prepare_data` / `train` only know about the `on_event` callback. This module
-supplies one tailored to a Jupyter/Colab cell: it redraws a matplotlib chart of
-the training & validation loss in place, and prints text samples as they appear.
+`prepare_data` / `train` only know about the `on_event` callback. This supplies
+one tailored to a Jupyter/Colab cell. The trick that keeps it from strobing: we
+**never** clear the cell. Instead the loss chart lives in a single output slot
+that we update *in place* (and only every couple of seconds), while text samples
+are printed once each and simply accumulate below it — so you can actually read
+the checkpoints as they stream in while the chart keeps ticking above them.
 
 Usage inside the notebook:
 
@@ -16,21 +19,22 @@ from __future__ import annotations
 
 
 class NotebookReporter:
-    def __init__(self, refresh_every: int = 1):
-        self.refresh_every = refresh_every
+    def __init__(self, chart_every_s: float = 2.0):
+        self.chart_every_s = chart_every_s     # min seconds between chart redraws
         self.steps, self.losses = [], []
         self.val_steps, self.val_losses = [], []
-        self.samples = []     # [{step, text, val_loss}] — the progression, kept
-        self.config = None
-        self.cur = None       # latest 'step' event, for the chart title
-        self._since = 0
+        self.cur = None                        # latest 'step' event, for the title
+        self._chart = None                     # the in-place display handle
+        self._last_chart = 0.0
+        self._intro_printed = False
 
     def __call__(self, event: dict):
+        import time
         t = event.get("type")
         if t == "config":
-            self.config = event["config"]
             n = event["config"].get("n_params", 0)
-            print(f"Model: {n/1e6:.1f}M parameters on {event['config'].get('device')} — training…")
+            print(f"Model: {n/1e6:.1f}M parameters on "
+                  f"{event['config'].get('device')} — training…\n")
         elif t in ("phase", "progress"):
             if event.get("msg"):
                 print(f"  · {event['msg']}")
@@ -38,57 +42,56 @@ class NotebookReporter:
             self.steps.append(event["step"])
             self.losses.append(event["loss"])
             self.cur = event
-            self._since += 1
-            if self._since >= self.refresh_every:
-                self._since = 0
-                self._render()
+            # throttle: only redraw the chart every few seconds, not every step
+            if time.time() - self._last_chart >= self.chart_every_s:
+                self._draw_chart()
         elif t == "eval":
             self.val_steps.append(event["step"])
             self.val_losses.append(event["val_loss"])
-            self._render()
         elif t == "sample":
-            self.samples.append({"step": event["step"], "text": event["text"],
-                                 "val_loss": event.get("val_loss")})
-            self._render()
+            self._draw_chart()                 # refresh the chart at the checkpoint
+            self._print_sample(event)
         elif t == "done":
-            self._render(done=event)
+            self._draw_chart()
+            print(f"\n✓ trained in {event['elapsed_s']/60:.1f} min · "
+                  f"final loss {event['final_loss']:.3f} · saved {event.get('ckpt')}")
 
-    def _render(self, done=None):
+    def _print_sample(self, event: dict):
+        # printed once, never cleared — so the progression stays readable
+        if not self._intro_printed:
+            self._intro_printed = True
+            print("\nThe model’s writing at each checkpoint (prompt: "
+                  "“Once upon a time”) — watch it go from noise to sentences:")
+        vl = f" · val loss {event['val_loss']:.2f}" if event.get("val_loss") is not None else ""
+        print(f"\n── step {event['step']}{vl} " + "─" * 22)
+        print(event["text"].strip())
+
+    def _draw_chart(self):
+        import time
         import matplotlib.pyplot as plt
-        from IPython.display import clear_output
-        clear_output(wait=True)
+        from IPython.display import display
+        self._last_chart = time.time()
 
-        # --- the live loss chart ---
-        fig = plt.figure(figsize=(9, 4))
+        fig, ax = plt.subplots(figsize=(9, 4))
         if self.steps:
-            plt.plot(self.steps, self.losses, lw=1, label="train loss", color="#4f8cff")
+            ax.plot(self.steps, self.losses, lw=1, label="train loss", color="#4f8cff")
         if self.val_steps:
-            plt.plot(self.val_steps, self.val_losses, "o-", lw=1.5,
-                     label="val loss", color="#ff7a59")
-        plt.xlabel("step")
-        plt.ylabel("loss (cross-entropy)")
-        if done:
-            plt.title(f"done · final loss {done['final_loss']:.3f} · "
-                      f"{done['elapsed_s']/60:.1f} min")
-        elif self.cur:
+            ax.plot(self.val_steps, self.val_losses, "o-", lw=1.5,
+                    label="val loss", color="#ff7a59")
+        ax.set_xlabel("step")
+        ax.set_ylabel("loss (cross-entropy)")
+        if self.cur:
             c = self.cur
-            plt.title(f"step {c['step']} / {c.get('max_steps','?')}  ·  loss {c['loss']:.3f}"
-                      f"  ·  {c.get('tok_per_s',0):,.0f} tok/s  ·  "
-                      f"eta {c.get('eta_s',0)/60:.1f} min")
-        plt.legend()
-        plt.grid(alpha=0.3)
-        plt.tight_layout()
-        plt.show()
-        plt.close(fig)   # free the figure so repeated redraws don't pile up
+            ax.set_title(f"step {c['step']} / {c.get('max_steps','?')}  ·  "
+                         f"loss {c['loss']:.3f}  ·  {c.get('tok_per_s',0):,.0f} tok/s  ·  "
+                         f"eta {c.get('eta_s',0)/60:.1f} min")
+        ax.legend()
+        ax.grid(alpha=0.3)
+        fig.tight_layout()
 
-        # --- the sample progression (this is the part that persists) ---
-        if self.samples:
-            print('The model’s writing at each checkpoint (prompt: '
-                  '“Once upon a time”) — watch it go from noise to sentences:\n')
-            for s in self.samples:
-                vl = f" · val loss {s['val_loss']:.2f}" if s.get("val_loss") is not None else ""
-                print(f"── step {s['step']}{vl} " + "─" * 22)
-                print(s["text"].strip() + "\n")
-        if done:
-            print(f"✓ trained in {done['elapsed_s']/60:.1f} min · "
-                  f"final loss {done['final_loss']:.3f} · saved {done.get('ckpt')}")
+        # one persistent output slot, updated in place — never clear_output()
+        if self._chart is None:
+            self._chart = display(fig, display_id=True)
+        else:
+            self._chart.update(fig)
+        plt.close(fig)

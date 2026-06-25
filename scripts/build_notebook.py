@@ -25,16 +25,14 @@ CELLS = [
         "# magic&#8209;math — train a language model from scratch 🪄",
         "",
         "This notebook trains a small language model to write its own little "
-        "stories. About 12M parameters, trained from scratch right here on a free "
-        "GPU — no pretrained weights anywhere.",
+        "stories. About 12M parameters.",
         "",
         "**To run it:** in the menu go to **Runtime → Change runtime type → "
-        "T4 GPU** (free), then **Runtime → Run all**. That's the whole thing. "
-        "Scroll down and watch the loss curve fall and the samples get more "
-        "coherent.",
+        "A100** (free), then **Runtime → Run all**. Scroll down and watch the loss "
+        "curve fall and the samples get more coherent.",
         "",
-        "You don't need any machine-learning background. Each step explains "
-        "what it's doing and why, building up from tokens to a trained model.",
+        "Each step explains what it's doing and why, building up from tokens to a "
+        "trained model.",
     ),
     md(
         "## How a language model works, before we build one",
@@ -81,10 +79,10 @@ CELLS = [
     md(
         "## Build the model",
         "",
-        "A ~12M-parameter Llama-style model — small enough to train from scratch "
-        "right here, big enough to write coherent little stories. The cell below "
-        "builds its config (and turns on checkpoint saving so Step 6 can compare "
-        "an early checkpoint against a late one).",
+        "A ~12M-parameters — small enough to train from scratch right here, big "
+        "enough to write coherent little stories. The cell below builds its config "
+        "(and turns on checkpoint saving so Step 6 can compare an early checkpoint "
+        "against a late one).",
     ),
     code(
         "from magicmath.config import get_configs, config_summary",
