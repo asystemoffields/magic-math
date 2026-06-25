@@ -1,14 +1,8 @@
 # magic-math 🪄
 
-**Train a small but genuinely modern language model from scratch — until it
-writes its own little stories.** No pretrained weights, no magic downloads of
-someone else's model. You start from random numbers and a pile of text, and you
+**Train a small language model from scratch — until it
+writes its own little stories.** Start from random numbers and a pile of text, and
 end up with a model that strings together coherent English.
-
-It's the same architecture family as Llama 3 and Mistral — just shrunk to about
-**27 million parameters**, small enough to train from scratch end to end
-yourself. And it's built to be *read*: every file explains what it's doing and
-why, assuming you know what a vector is but nothing else about machine learning.
 
 Two ways to run it. Pick one:
 
@@ -98,9 +92,7 @@ A language model is six ideas stacked together. No background needed:
 
 The whole repo is those six ideas, written to be read top-to-bottom.
 
-## What makes it *modern*
-
-This is the same architecture family as today's open models (Llama 3, Mistral,
+This is the same architecture family as today's frontier open models (Kimi, Mistral,
 Qwen), shrunk down. Each component is the current standard choice, and each is
 implemented and **commented in plain English** in
 [`magicmath/model.py`](magicmath/model.py):
