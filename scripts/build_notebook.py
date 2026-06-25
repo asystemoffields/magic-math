@@ -141,10 +141,11 @@ CELLS = [
         "loss on held-out text.",
         "",
         "**Below the chart**, the model's writing is sampled at each *checkpoint* — "
-        "starting at **step 0 (pure noise)** and every few hundred steps after — and "
-        "the snapshots *accumulate*. When it finishes, scroll that list to see the "
-        "whole arc from gibberish to little sentences. That transition is the single "
-        "most instructive thing here.",
+        "**densely at first** (steps 0, 1, 2, 4, 8, 16, …) so you catch the fast early "
+        "jump from noise to words, then at a steady cadence — and the snapshots "
+        "*accumulate*. When it finishes, scroll that list to see the whole arc from "
+        "gibberish to little sentences. That transition is the single most instructive "
+        "thing here.",
         "",
         "*(We set `save_checkpoints=True` earlier, so the model's weights are also "
         "saved at each checkpoint to `out/model-…-step<N>.pt` — that's what Step 6 "
@@ -157,9 +158,10 @@ CELLS = [
     md(
         "## Step 4 — talk to your model",
         "",
-        "It's trained. Give it a prompt and let it continue. Try changing the "
-        "prompt, or the `temperature` (higher = more random/creative, lower = "
-        "more predictable).",
+        "It's trained. Give it a prompt and watch it continue, token by token. Try "
+        "changing the prompt or the `temperature` (higher = more random/creative, "
+        "lower = more predictable). Under the hood it uses nucleus (top-p) sampling "
+        "and a repetition penalty, so a small model reads cleanly instead of looping.",
     ),
     code(
         "from magicmath.sample import generate_stream",

@@ -247,22 +247,30 @@ class MagicMath(nn.Module):
         return logits, None
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=None, eos_id=None):
+    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=None, top_p=None,
+                 repetition_penalty=1.0, eos_id=None):
         """Autoregressive sampling. No KV cache — we re-run the full context each
-        step. Slow, but dead simple, and plenty fast for short toy generations."""
+        step. Slow, but dead simple, and plenty fast for short toy generations.
+
+        The decoding knobs are what make a small model *read* well:
+          temperature         <1 = safer/repetitive, >1 = wilder
+          top_k / top_p        only sample from the most likely tokens
+          repetition_penalty   >1 discourages repeating tokens it just used —
+                               the single biggest fix for a tiny model's habit
+                               of getting stuck in a loop.
+        """
         was_training = self.training
         self.eval()
         for _ in range(max_new_tokens):
             idx_cond = idx[:, -self.cfg.max_seq_len:]
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :]
+            logits = apply_repetition_penalty(logits, idx, repetition_penalty)
             if temperature <= 0.0:
                 next_id = logits.argmax(dim=-1, keepdim=True)
             else:
                 logits = logits / temperature
-                if top_k is not None:
-                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                    logits[logits < v[:, [-1]]] = -float("inf")
+                logits = filter_top_k_top_p(logits, top_k, top_p)
                 probs = F.softmax(logits, dim=-1)
                 next_id = torch.multinomial(probs, num_samples=1)
             idx = torch.cat([idx, next_id], dim=1)
@@ -271,3 +279,31 @@ class MagicMath(nn.Module):
         if was_training:
             self.train()
         return idx
+
+
+def apply_repetition_penalty(logits, idx, penalty):
+    """Divide the logits of tokens already in `idx` so they're less likely to be
+    chosen again (the CTRL-style penalty). penalty=1.0 is a no-op."""
+    if penalty == 1.0:
+        return logits
+    for b in range(idx.shape[0]):
+        seen = torch.unique(idx[b])
+        vals = logits[b, seen]
+        logits[b, seen] = torch.where(vals > 0, vals / penalty, vals * penalty)
+    return logits
+
+
+def filter_top_k_top_p(logits, top_k=None, top_p=None):
+    """Keep only the most likely tokens: top_k by count, top_p by cumulative
+    probability (nucleus sampling). Everything else gets -inf."""
+    if top_k:
+        k = min(top_k, logits.size(-1))
+        kth = torch.topk(logits, k)[0][:, [-1]]
+        logits = logits.masked_fill(logits < kth, -float("inf"))
+    if top_p and top_p < 1.0:
+        ordered, order = torch.sort(logits, descending=True, dim=-1)
+        cum = F.softmax(ordered, dim=-1).cumsum(dim=-1)
+        drop = cum - F.softmax(ordered, dim=-1) > top_p   # keep at least the top token
+        ordered = ordered.masked_fill(drop, -float("inf"))
+        logits = torch.full_like(logits, -float("inf")).scatter(-1, order, ordered)
+    return logits

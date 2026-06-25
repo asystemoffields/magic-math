@@ -142,11 +142,16 @@ The entire dependency list is **three packages**: `torch`, `numpy`,
 
 ## The model
 
-One configuration: a **~12M-parameter** Llama-style decoder, trained on ~250 MB
-of TinyStories (≈60M tokens). Big enough to write coherent little stories, small
-enough to train from scratch yourself. Tweak it in
-[`magicmath/config.py`](magicmath/config.py) — `get_configs(...)` takes keyword
-overrides for any field (depth, width, steps, …).
+One configuration: a **~12M-parameter** Llama-style decoder (RMSNorm, RoPE, GQA,
+SwiGLU, QK-norm), trained on ~500 MB of TinyStories with weight-averaging (EMA).
+Big enough to write coherent little stories, small enough to train from scratch
+yourself.
+
+It's tuned for **quality over speed** — the run is a deliberate overtrain, and
+`max_steps` in [`magicmath/config.py`](magicmath/config.py) is the main dial:
+raise it (and `data_bytes`) for a more fluent model at the cost of a longer run,
+or lower it if you just want to watch the pipeline work. `get_configs(...)` takes
+keyword overrides for any field (depth, width, steps, …).
 
 ## Watching it learn (checkpoints)
 
@@ -216,8 +221,10 @@ designed so that *tiny* models can learn fluent, grammatical English. It's what
 makes coherent sentences possible at this small size.
 
 **It said something weird / repeated itself.** It's only a 12M-parameter model —
-being occasionally weird is expected and kind of the charm. Train it for longer
-(raise `max_steps`), or raise/lower `temperature` when sampling.
+being occasionally weird is expected and kind of the charm. Generation already
+uses nucleus (top-p) sampling and a repetition penalty to keep it from looping;
+you can also train it longer (raise `max_steps`) or adjust `temperature` when
+sampling.
 
 ---
 

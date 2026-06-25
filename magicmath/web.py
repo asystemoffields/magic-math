@@ -142,9 +142,18 @@ def make_handler(state: AppState):
 
         def _params(self):
             qs = parse_qs(urlparse(self.path).query)
-            return (qs.get("prompt", [""])[0],
-                    int(qs.get("tokens", ["200"])[0]),
-                    float(qs.get("temperature", ["0.8"])[0]))
+
+            def num(key, default):
+                v = qs.get(key, [None])[0]
+                return float(v) if v not in (None, "") else default
+
+            return dict(
+                prompt=qs.get("prompt", [""])[0],
+                max_new_tokens=int(qs.get("tokens", ["200"])[0]),
+                temperature=num("temperature", 0.8),
+                top_p=num("top_p", 0.9),
+                repetition_penalty=num("repetition_penalty", 1.3),
+            )
 
         def _generate(self):
             ready = self._ready_model()
@@ -153,11 +162,9 @@ def make_handler(state: AppState):
                            "application/json")
                 return
             model, tok, device = ready
-            prompt, tokens, temperature = self._params()
             from .sample import generate as _gen
             with state.lock:
-                text = _gen(model, tok, prompt, max_new_tokens=tokens,
-                            temperature=temperature, device=device)
+                text = _gen(model, tok, device=device, **self._params())
             self._send(200, json.dumps({"text": text}).encode(), "application/json")
 
         def _generate_stream(self):
@@ -169,7 +176,7 @@ def make_handler(state: AppState):
                            "application/json")
                 return
             model, tok, device = ready
-            prompt, tokens, temperature = self._params()
+            params = self._params()
             # echo=0 suppresses the prompt echo (the playground shows the prompt
             # itself, so it only wants the model's continuation streamed back).
             echo = parse_qs(urlparse(self.path).query).get("echo", ["1"])[0] != "0"
@@ -182,8 +189,7 @@ def make_handler(state: AppState):
                 # one generation at a time (the model isn't thread-safe)
                 with state.lock:
                     first = True
-                    for delta in generate_stream(model, tok, prompt, max_new_tokens=tokens,
-                                                 temperature=temperature, device=device):
+                    for delta in generate_stream(model, tok, device=device, **params):
                         if first:               # the first chunk is the prompt echo
                             first = False
                             if not echo:

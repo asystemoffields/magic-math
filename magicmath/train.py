@@ -92,8 +92,47 @@ def _sample_text(model, tok, cfg: TrainConfig, device: str) -> str:
     ids = tok_lib.encode(tok, cfg.sample_prompt)
     x = torch.tensor([ids], dtype=torch.long, device=device)
     out = model.generate(x, max_new_tokens=cfg.sample_tokens, temperature=0.8,
-                         top_k=200, eos_id=tok_lib.eos_id(tok))
+                         top_p=0.9, repetition_penalty=1.3, eos_id=tok_lib.eos_id(tok))
     return tok_lib.decode(tok, out[0].tolist())
+
+
+def checkpoint_steps(max_steps: int, cadence: int) -> list[int]:
+    """Steps at which to sample/checkpoint: geometrically *dense early* (1, 2, 4,
+    8, …) so the fast noise→grammar transition is visible, then every `cadence`
+    steps once the gaps would exceed it."""
+    steps = {0, max_steps - 1}
+    k = 1
+    while k < cadence and k < max_steps:
+        steps.add(k)
+        k *= 2
+    s = cadence
+    while s < max_steps:
+        steps.add(s)
+        s += cadence
+    return sorted(steps)
+
+
+class EMA:
+    """Exponential moving average of the weights. The smoothed model is usually a
+    little better than the final raw one, basically for free: we train normally
+    and keep a shadow copy that trails the live weights, then save the shadow."""
+
+    def __init__(self, model, decay: float):
+        self.decay = decay
+        self.shadow = {n: p.detach().clone()
+                       for n, p in model.named_parameters() if p.requires_grad}
+
+    @torch.no_grad()
+    def update(self, model):
+        for n, p in model.named_parameters():
+            if n in self.shadow:
+                self.shadow[n].mul_(self.decay).add_(p.detach(), alpha=1 - self.decay)
+
+    @torch.no_grad()
+    def copy_to(self, model):
+        for n, p in model.named_parameters():
+            if n in self.shadow:
+                p.copy_(self.shadow[n])
 
 
 def train(model_cfg: ModelConfig, train_cfg: TrainConfig, data: dict,
@@ -135,6 +174,8 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, data: dict,
     val_batcher = Batcher(data["val_bin"], train_cfg.seq_len, device)
 
     tokens_per_step = train_cfg.batch_size * train_cfg.seq_len * train_cfg.grad_accum
+    sample_steps = set(checkpoint_steps(train_cfg.max_steps, train_cfg.sample_interval))
+    ema = EMA(model, train_cfg.ema_decay) if train_cfg.ema_decay > 0 else None
     model.train()
     t0 = time.time()
     last_t = t0
@@ -169,6 +210,9 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, data: dict,
         else:
             optimizer.step()
 
+        if ema is not None:
+            ema.update(model)
+
         # --- logging -------------------------------------------------------
         if on_event and (step % train_cfg.log_interval == 0 or step == train_cfg.max_steps - 1):
             now = time.time()
@@ -180,26 +224,22 @@ def train(model_cfg: ModelConfig, train_cfg: TrainConfig, data: dict,
                       "tok_per_s": tok_per_s, "eta_s": eta,
                       "tokens": tokens_seen, "max_steps": train_cfg.max_steps})
 
-        # --- periodic validation ------------------------------------------
-        if on_event and train_cfg.eval_interval and (
-                (step + 1) % train_cfg.eval_interval == 0 or step == train_cfg.max_steps - 1):
+        # --- checkpoint: eval, sample what the model writes, optionally save
+        #     weights. Denser early (see sample_steps) so you can watch the model
+        #     go from noise to sentences in the first few hundred steps. --------
+        if on_event and step in sample_steps:
             last_val = estimate_val_loss(model, val_batcher, train_cfg, autocast_ctx)
             on_event({"type": "eval", "step": step, "val_loss": last_val})
-            last_t = time.time()  # don't count eval time against throughput
-
-        # --- checkpoint: snapshot what the model writes (and optionally its
-        #     weights) so you can watch it improve from noise -> sentences ----
-        if on_event and train_cfg.sample_interval and (
-                step == 0 or (step + 1) % train_cfg.sample_interval == 0
-                or step == train_cfg.max_steps - 1):
             text = _sample_text(model, tok, train_cfg, device)
             ev = {"type": "sample", "step": step, "text": text, "val_loss": last_val}
             if train_cfg.save_checkpoints:
                 ev["ckpt"] = save_checkpoint(model, model_cfg, train_cfg, data, device, step=step)
             on_event(ev)
-            last_t = time.time()
+            last_t = time.time()   # don't count eval/sample time against throughput
 
     elapsed = time.time() - t0
+    if ema is not None:
+        ema.copy_to(model)         # the final saved model is the smoothed (EMA) one
     ckpt = save_checkpoint(model, model_cfg, train_cfg, data, device)
     if on_event:
         on_event({"type": "done", "final_loss": loss_accum,

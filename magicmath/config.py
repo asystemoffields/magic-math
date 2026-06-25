@@ -75,15 +75,16 @@ class TrainConfig:
     beta2: float = 0.95
     grad_clip: float = 1.0
 
-    # --- logging / eval -----------------------------------------------------
-    log_interval: int = 10          # emit a 'step' event every N steps
-    eval_interval: int = 750        # measure validation loss every N steps
+    # --- logging / checkpoints ----------------------------------------------
+    log_interval: int = 10          # emit a 'step' event (loss/throughput) every N steps
     eval_iters: int = 50            # batches to average for each validation estimate
-    sample_interval: int = 750      # generate a text sample every N steps
+    sample_interval: int = 750      # the steady checkpoint cadence (sampling is also
+                                    # geometrically dense early — see checkpoint_steps)
     sample_prompt: str = "Once upon a time"
     sample_tokens: int = 200        # length of those samples
 
     # --- misc ---------------------------------------------------------------
+    ema_decay: float = 0.999        # weight-averaging decay (0 disables it)
     seed: int = 1337
     out_dir: str = "out"
     compile: bool = False           # torch.compile — faster on Linux, flaky on Windows; off by default
@@ -105,10 +106,10 @@ def get_configs(**overrides):
     get_configs(save_checkpoints=True) or get_configs(max_steps=3000, d_model=512).
     """
     model_spec = dict(vocab_size=8192, d_model=384, n_layers=6, n_heads=6,
-                      n_kv_heads=2, max_seq_len=512)
-    train_spec = dict(data_bytes=250_000_000, batch_size=64, max_steps=6000,
-                      warmup_steps=200, lr=6e-4, min_lr=6e-5,
-                      log_interval=10, eval_interval=750, sample_interval=750)
+                      n_kv_heads=2, max_seq_len=512, qk_norm=True)
+    train_spec = dict(data_bytes=500_000_000, batch_size=64, max_steps=10000,
+                      warmup_steps=300, lr=6e-4, min_lr=6e-5,
+                      log_interval=10, sample_interval=750)
 
     # Merge all overrides into the spec dicts *before* constructing the configs,
     # so we never build an intermediate, half-overridden config that trips a
