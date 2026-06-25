@@ -91,8 +91,9 @@ def estimate_val_loss(model, batcher: Batcher, cfg: TrainConfig, autocast_ctx) -
 def _sample_text(model, tok, cfg: TrainConfig, device: str) -> str:
     ids = tok_lib.encode(tok, cfg.sample_prompt)
     x = torch.tensor([ids], dtype=torch.long, device=device)
-    out = model.generate(x, max_new_tokens=cfg.sample_tokens, temperature=0.8,
-                         top_p=0.9, repetition_penalty=1.3, eos_id=tok_lib.eos_id(tok))
+    out = model.generate(x, max_new_tokens=cfg.sample_tokens, temperature=0.7,
+                         top_p=0.9, repetition_penalty=1.15, no_repeat_ngram_size=3,
+                         eos_id=tok_lib.eos_id(tok))
     return tok_lib.decode(tok, out[0].tolist())
 
 

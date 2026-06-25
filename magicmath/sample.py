@@ -16,12 +16,16 @@ import torch
 import torch.nn.functional as F
 
 from .config import ModelConfig
-from .model import MagicMath, apply_repetition_penalty, filter_top_k_top_p
+from .model import (MagicMath, apply_repetition_penalty, filter_top_k_top_p,
+                    block_repeat_ngrams)
 from . import tokenizer as tok_lib
 
-# Decoding defaults tuned to make a tiny model read well: nucleus sampling plus
-# a repetition penalty (which stops it looping on "...Jeff, who was Jeff, who...").
-ELOQUENT = dict(temperature=0.8, top_k=None, top_p=0.9, repetition_penalty=1.3)
+# Decoding defaults tuned so a tiny model stays *coherent*: a calm temperature,
+# nucleus sampling, no-repeat-ngram to stop verbatim loops, and only a gentle,
+# windowed repetition penalty (a blanket one makes it swap a character's name
+# out mid-story — see model.apply_repetition_penalty).
+ELOQUENT = dict(temperature=0.7, top_k=None, top_p=0.9,
+                repetition_penalty=1.15, no_repeat_ngram_size=3)
 
 
 def load_model(ckpt_path: str, device: str | None = None):
@@ -37,21 +41,24 @@ def load_model(ckpt_path: str, device: str | None = None):
 
 
 def generate(model, tok, prompt: str, max_new_tokens: int = 200,
-             temperature: float = 0.8, top_k=None, top_p: float = 0.9,
-             repetition_penalty: float = 1.3, device: str | None = None) -> str:
+             temperature: float = 0.7, top_k=None, top_p: float = 0.9,
+             repetition_penalty: float = 1.15, no_repeat_ngram_size: int = 3,
+             device: str | None = None) -> str:
     device = device or next(model.parameters()).device
     ids = tok_lib.encode(tok, prompt) if prompt else [tok_lib.eos_id(tok)]
     x = torch.tensor([ids], dtype=torch.long, device=device)
     out = model.generate(x, max_new_tokens=max_new_tokens, temperature=temperature,
                          top_k=top_k, top_p=top_p, repetition_penalty=repetition_penalty,
+                         no_repeat_ngram_size=no_repeat_ngram_size,
                          eos_id=tok_lib.eos_id(tok))
     return tok_lib.decode(tok, out[0].tolist())
 
 
 @torch.no_grad()
 def generate_stream(model, tok, prompt: str, max_new_tokens: int = 200,
-                    temperature: float = 0.8, top_k=None, top_p: float = 0.9,
-                    repetition_penalty: float = 1.3, device=None):
+                    temperature: float = 0.7, top_k=None, top_p: float = 0.9,
+                    repetition_penalty: float = 1.15, no_repeat_ngram_size: int = 3,
+                    repetition_window: int = 64, device=None):
     """Like `generate`, but a generator: it yields the text one chunk at a time
     as each token is produced, so a UI (or the notebook) can show the model
     writing live instead of waiting for the whole completion.
@@ -73,7 +80,8 @@ def generate_stream(model, tok, prompt: str, max_new_tokens: int = 200,
         idx_cond = x[:, -m.cfg.max_seq_len:]
         logits, _ = m(idx_cond)
         logits = logits[:, -1, :]
-        logits = apply_repetition_penalty(logits, x, repetition_penalty)
+        logits = apply_repetition_penalty(logits, x, repetition_penalty, repetition_window)
+        logits = block_repeat_ngrams(logits, x, no_repeat_ngram_size)
         if temperature <= 0:
             nxt = logits.argmax(dim=-1, keepdim=True)
         else:
@@ -101,7 +109,7 @@ def list_checkpoints(out_dir: str, preset: str):
 
 
 def compare_checkpoints(ckpt_a: str, ckpt_b: str, prompt: str,
-                        max_new_tokens: int = 120, temperature: float = 0.8,
+                        max_new_tokens: int = 120, temperature: float = 0.7,
                         device: str | None = None):
     """Load two checkpoints and generate from the *same* prompt with each — the
     clearest before/after of what training bought. Returns (text_a, text_b)."""
@@ -117,15 +125,17 @@ def main():
     ap.add_argument("--ckpt", default="out/model-default.pt")
     ap.add_argument("--prompt", default="Once upon a time")
     ap.add_argument("--tokens", type=int, default=200)
-    ap.add_argument("--temperature", type=float, default=0.8)
+    ap.add_argument("--temperature", type=float, default=0.7)
     ap.add_argument("--top_k", type=int, default=None)
     ap.add_argument("--top_p", type=float, default=0.9)
-    ap.add_argument("--repetition_penalty", type=float, default=1.3)
+    ap.add_argument("--repetition_penalty", type=float, default=1.15)
+    ap.add_argument("--no_repeat_ngram_size", type=int, default=3)
     args = ap.parse_args()
 
     model, tok, device = load_model(args.ckpt)
     print(generate(model, tok, args.prompt, args.tokens, args.temperature,
-                   args.top_k, args.top_p, args.repetition_penalty, device))
+                   args.top_k, args.top_p, args.repetition_penalty,
+                   args.no_repeat_ngram_size, device))
 
 
 if __name__ == "__main__":

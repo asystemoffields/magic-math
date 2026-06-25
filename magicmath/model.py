@@ -247,17 +247,25 @@ class MagicMath(nn.Module):
         return logits, None
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=0.8, top_k=None, top_p=None,
-                 repetition_penalty=1.0, eos_id=None):
+    def generate(self, idx, max_new_tokens, temperature=0.7, top_k=None, top_p=0.9,
+                 repetition_penalty=1.15, no_repeat_ngram_size=3,
+                 repetition_window=64, eos_id=None):
         """Autoregressive sampling. No KV cache — we re-run the full context each
         step. Slow, but dead simple, and plenty fast for short toy generations.
 
-        The decoding knobs are what make a small model *read* well:
-          temperature         <1 = safer/repetitive, >1 = wilder
-          top_k / top_p        only sample from the most likely tokens
-          repetition_penalty   >1 discourages repeating tokens it just used —
-                               the single biggest fix for a tiny model's habit
-                               of getting stuck in a loop.
+        The decoding knobs are what make a small model *read* well — and, just as
+        importantly, keep it from losing the thread of its own story:
+          temperature           <1 = safer/more consistent, >1 = wilder
+          top_k / top_p          only sample from the most likely tokens
+          no_repeat_ngram_size   forbid repeating any verbatim n-gram (e.g. n=3
+                                 blocks "...Jeff, who was Jeff, who was..."). This
+                                 kills loops *without* banning a word outright, so
+                                 a character can keep its name.
+          repetition_penalty     a gentle nudge away from recently-used tokens;
+          repetition_window      ...but only over the last `window` tokens, so a
+                                 name introduced early in the story isn't
+                                 suppressed later (which is what makes a small
+                                 model swap "Joe" out for a fresh name mid-story).
         """
         was_training = self.training
         self.eval()
@@ -265,7 +273,8 @@ class MagicMath(nn.Module):
             idx_cond = idx[:, -self.cfg.max_seq_len:]
             logits, _ = self(idx_cond)
             logits = logits[:, -1, :]
-            logits = apply_repetition_penalty(logits, idx, repetition_penalty)
+            logits = apply_repetition_penalty(logits, idx, repetition_penalty, repetition_window)
+            logits = block_repeat_ngrams(logits, idx, no_repeat_ngram_size)
             if temperature <= 0.0:
                 next_id = logits.argmax(dim=-1, keepdim=True)
             else:
@@ -281,15 +290,42 @@ class MagicMath(nn.Module):
         return idx
 
 
-def apply_repetition_penalty(logits, idx, penalty):
-    """Divide the logits of tokens already in `idx` so they're less likely to be
-    chosen again (the CTRL-style penalty). penalty=1.0 is a no-op."""
+def apply_repetition_penalty(logits, idx, penalty, window=0):
+    """Damp the logits of recently-used tokens so they're less likely to repeat
+    (the CTRL-style penalty). penalty=1.0 is a no-op.
+
+    `window` is what keeps this coherence-friendly: with window>0 only the last
+    `window` tokens count, so a name introduced at the start of a story isn't
+    penalized for the rest of it. (Penalizing the *whole* history — window=0 —
+    is exactly what makes a small model drop "Joe" and grab a fresh name once
+    "Joe" has appeared a few times.)"""
     if penalty == 1.0:
         return logits
     for b in range(idx.shape[0]):
-        seen = torch.unique(idx[b])
+        recent = idx[b, -window:] if window else idx[b]
+        seen = torch.unique(recent)
         vals = logits[b, seen]
         logits[b, seen] = torch.where(vals > 0, vals / penalty, vals * penalty)
+    return logits
+
+
+def block_repeat_ngrams(logits, idx, n):
+    """Forbid any token that would complete a verbatim repeat of an n-gram already
+    in the sequence (the standard 'no-repeat n-gram' rule). Set those logits to
+    -inf. Unlike a blanket penalty this stops loops ("who was Jeff, who was Jeff")
+    while leaving the model free to reuse a word in a *new* context — so a
+    character can keep its name across the whole story. n<=0 disables it."""
+    if not n or n <= 0:
+        return logits
+    for b in range(idx.shape[0]):
+        seq = idx[b].tolist()
+        if len(seq) < n:
+            continue
+        prefix = tuple(seq[-(n - 1):]) if n > 1 else ()
+        banned = {seq[i + n - 1] for i in range(len(seq) - n + 1)
+                  if tuple(seq[i:i + n - 1]) == prefix}
+        if banned:
+            logits[b, list(banned)] = -float("inf")
     return logits
 
 

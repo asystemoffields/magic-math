@@ -150,9 +150,10 @@ def make_handler(state: AppState):
             return dict(
                 prompt=qs.get("prompt", [""])[0],
                 max_new_tokens=int(qs.get("tokens", ["200"])[0]),
-                temperature=num("temperature", 0.8),
+                temperature=num("temperature", 0.7),
                 top_p=num("top_p", 0.9),
-                repetition_penalty=num("repetition_penalty", 1.3),
+                repetition_penalty=num("repetition_penalty", 1.15),
+                no_repeat_ngram_size=int(num("no_repeat_ngram_size", 3)),
             )
 
         def _generate(self):
